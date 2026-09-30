@@ -69,7 +69,7 @@
     if (free <= 0) { UI.toast('没有空余地块'); return; }
     const opts = R.FAC_ORDER.map(k => {
       const F = R.FACILITIES[k], n = city.facs.filter(f => f.type === k).length;
-      return `<button data-f="${k}" ${city.gold < F.cost ? 'disabled' : ''} style="text-align:left;padding:6px 10px">
+      return `<button data-f="${k}" ${city.gold < F.cost || (F.water && !G.nearWater(city.id)) ? 'disabled' : ''} style="text-align:left;padding:6px 10px">
         <b>${F.name}</b>（${n}）　<span class="muted">金 ${F.cost}</span><br><small class="muted">${F.desc}</small></button>`;
     }).join('');
     Dlg.open(`<h2>开发 · ${esc(city.name)}</h2><p class="muted">空余地块 ${free}　城内金 ${city.gold}</p>
@@ -143,7 +143,7 @@
     const offs = idle(city).sort((a, b) => (b.s[0] + b.s[1]) - (a.s[0] + a.s[1]));
     if (!offs.length) { UI.toast('没有可出征的武将'); return; }
     if (!Un.exitHexes(city).length) { UI.toast('城外没有可出阵的空地'); return; }
-    const st = { chosen: [], type: transport ? 'transport' : null };
+    const st = { chosen: [], type: transport ? 'transport' : null, ship: 'zou' };
     const types = R.TYPE_ORDER.filter(t => transport ? t === 'transport' : t !== 'transport');
     const avail = t => { const wk = R.TYPES[t].weapon; return !wk ? Infinity : R.WEAPONS[wk].siege ? (city.w[wk] > 0 ? Infinity : 0) : city.w[wk]; };
     const rows = offs.map(o => `<tr class="pick" data-oid="${o.id}" title="${esc(UI.offTitle(o))}"><td>${esc(o.name)}</td><td>${o.s[0]}</td><td>${o.s[1]}</td><td>${o.s[2]}</td><td>${o.s[3]}</td><td>${o.s[4]}</td><td>${o.skill ? `<span class="skill">${o.skill}</span>` : '-'}</td><td>${o.apt}</td><td>${U.fmt(Un.maxTroops(o))}</td></tr>`).join('');
@@ -153,6 +153,7 @@
       <div class="scroll" style="max-height:32vh"><table class="olist">${UI.offHead('<th>适性</th><th>统兵</th>')}${rows}</table></div>
       <div class="row muted" id="m-sel">未选择</div>
       ${transport ? '' : `<div class="row"><label>兵种</label><div class="opts" id="m-types">${types.map(t => `<button data-t="${t}" ${avail(t) < 100 ? 'disabled' : ''}>${R.TYPES[t].name}<br><small class="muted">${avail(t) === Infinity ? '—' : U.fmt(avail(t))}</small></button>`).join('')}</div></div>`}
+      <div class="row"><label>舰船</label><div class="opts" id="m-ships">${Object.keys(R.SHIPS).map(k => `<button data-s="${k}" ${k !== 'zou' && !(city.w[k] > 0) ? 'disabled' : ''} title="水上攻${R.SHIPS[k].atk} 防${R.SHIPS[k].def}${R.SHIPS[k].sea < Infinity ? '，可航行近海' : ''}">${R.SHIPS[k].name}<br><small class="muted">${k === 'zou' ? '—' : city.w[k] || 0}</small></button>`).join('')}</div></div>
       ${sl('m-troops', transport ? '护送兵' : '兵力', city.troops, 0)}
       ${sl('m-food', '兵粮', city.food, 0)}
       ${transport ? sl('m-gold', '金', city.gold, 0) + ['spear', 'halberd', 'crossbow', 'horse'].map(k => sl('m-w-' + k, R.WEAPONS[k].name, city.w[k], 0)).join('') : ''}
@@ -174,6 +175,7 @@
         });
         q('#m-sel').textContent = st.chosen.length ? '已选：' + st.chosen.map(id => G.off(id).name).join('、') : '未选择';
         if (!transport) m.querySelectorAll('#m-types button').forEach(b => b.classList.toggle('sel', b.dataset.t === st.type));
+        m.querySelectorAll('#m-ships button').forEach(b => b.classList.toggle('sel', b.dataset.s === st.ship));
         const tr = q('#m-troops'), mx = maxTroops();
         tr.max = Math.floor(mx / 100) * 100;
         if (resetTroops) tr.value = tr.max;
@@ -203,9 +205,10 @@
         upd(true);
       }));
       if (!transport) m.querySelectorAll('#m-types button').forEach(b => b.addEventListener('click', () => { st.type = b.dataset.t; upd(true); }));
+      m.querySelectorAll('#m-ships button').forEach(b => b.addEventListener('click', () => { st.ship = b.dataset.s; upd(false); }));
       m.querySelectorAll('input[type=range]').forEach(i => i.addEventListener('input', () => upd(false)));
       q('#m-ok').addEventListener('click', () => {
-        const cfg = { offs: st.chosen, type: st.type, troops: +q('#m-troops').value, food: +q('#m-food').value };
+        const cfg = { offs: st.chosen, type: st.type, troops: +q('#m-troops').value, food: +q('#m-food').value, ship: st.ship };
         if (transport) {
           cfg.cargo = { gold: +q('#m-gold').value, food: 0, w: {} };
           for (const k of ['spear', 'halberd', 'crossbow', 'horse']) cfg.cargo.w[k] = +q('#m-w-' + k).value;

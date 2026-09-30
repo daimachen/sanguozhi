@@ -27,12 +27,13 @@
     const S = G.S, pf = S.player, f = G.fac(pf);
     $('tb-date').textContent = G.dateStr();
     const fe = $('tb-faction');
-    fe.textContent = f.name; fe.style.background = f.color; fe.style.color = ['#e8e8e8', '#c9a227'].includes(f.color) ? '#222' : '#fff';
+    fe.textContent = `${f.name} · ${G.titleName(pf)}${f.emperor ? '（奉天子）' : ''}`; fe.style.background = f.color; fe.style.color = ['#e8e8e8', '#c9a227'].includes(f.color) ? '#222' : '#fff';
     const cs = G.citiesOf(pf);
     $('tb-stats').innerHTML = [
       ['都市', G.realCitiesOf(pf).length], ['武将', G.officersOf(pf).length], ['兵力', U.fmt(G.totalTroops(pf))],
       ['金', U.fmt(U.sum(cs, c => c.gold))], ['兵粮', U.fmt(U.sum(cs, c => c.food))],
       ['行动力', `<span style="color:var(--gold)">${f.ap}</span>/${R.AP_MAX}`],
+      ['托管', `<span style="color:${S.auto && S.auto !== 'manual' ? 'var(--green)' : 'var(--dim)'}">${R.AUTO_MODES[S.auto || 'manual'].name}</span>`],
     ].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('');
   };
 
@@ -77,10 +78,10 @@
       <p class="muted">移动消耗：${isFinite(SG.Map.moveCost(i, 'spear')) ? SG.Map.moveCost(i, 'spear') : '不可通行'}${t === SG.T.RIVER ? '；部队在河川上将变为舟船，战力依赖水军适性' : ''}</p>`;
   };
 
-  UI.offRow = (o, extra = '') => `<tr class="${o.acted ? 'acted' : ''}" title="${esc(UI.offTitle(o))}"><td>${esc(o.name)}${G.isRuler(o) ? '<span class="skill">★</span>' : ''}</td>
+  UI.offRow = (o, extra = '') => `<tr class="${o.acted ? 'acted' : ''}" title="${esc(UI.offTitle(o))}"><td>${esc(o.name)}${G.isRuler(o) ? '<span class="skill">★</span>' : G.rank(o) ? `<small class="rank">${G.rank(o).name}</small>` : ''}</td>
     <td>${o.s[0]}</td><td>${o.s[1]}</td><td>${o.s[2]}</td><td>${o.s[3]}</td><td>${o.s[4]}</td><td>${o.skill ? `<span class="skill">${o.skill}</span>` : '-'}</td>${extra}</tr>`;
   UI.offTitle = o => `${o.name} 统${o.s[0]} 武${o.s[1]} 智${o.s[2]} 政${o.s[3]} 魅${o.s[4]}\n适性 ` +
-    R.APT_NAMES.map((n, k) => n + o.apt[k]).join(' ') + (o.skill ? `\n特技【${o.skill}】${R.SKILLS[o.skill] || ''}` : '') + (o.faction >= 0 && o.status === 'active' ? `\n忠诚 ${o.loyalty}` : '');
+    R.APT_NAMES.map((n, k) => n + o.apt[k]).join(' ') + (o.skill ? `\n特技【${o.skill}】${R.SKILLS[o.skill] || ''}` : '') + (o.faction >= 0 && o.status === 'active' ? `\n忠诚 ${o.loyalty}　功绩 ${o.merit || 0}　官职 ${G.rank(o) ? G.rank(o).name : G.isRuler(o) ? '君主' : '无'}` : '');
   UI.offHead = (extra = '') => `<tr><th>武将</th><th>统</th><th>武</th><th>智</th><th>政</th><th>魅</th><th>特技</th>${extra}</tr>`;
 
   UI.cityPanel = city => {
@@ -89,7 +90,7 @@
     const gov = G.governor(city);
     const w = city.w;
     let h = `<h2>${esc(city.name)} ${UI.facChip(city.faction)}</h2>`;
-    h += `<div class="muted">${isCity ? ['', '小都市', '中都市', '大都市'][city.size] : '关隘'}　太守：${gov ? esc(gov.name) : '无'}</div>`;
+    h += `<div class="muted">${isCity ? ['', '小都市', '中都市', '大都市'][city.size] : city.kind === 'port' ? '港口（' + esc(G.city(SG.map.places[city.id].parent).name) + '）' : '关隘'}　太守：${gov ? esc(gov.name) : '无'}</div>`;
     h += `<div class="kv" style="margin-top:6px">
       <span>兵力</span><span>${U.fmt(city.troops)}</span><span>金</span><span>${U.fmt(city.gold)}</span>
       <span>兵粮</span><span>${U.fmt(city.food)}</span><span>气力</span><span>${city.energy}</span>
@@ -98,7 +99,8 @@
     if (own || city.faction < 0 || G.allied(city.faction, G.S.player)) {
       h += `<div class="kv"><span>枪</span><span>${U.fmt(w.spear)}</span><span>戟</span><span>${U.fmt(w.halberd)}</span>
         <span>弩</span><span>${U.fmt(w.crossbow)}</span><span>马</span><span>${U.fmt(w.horse)}</span>
-        <span>冲车</span><span>${w.ram}</span><span>井阑</span><span>${w.tower}</span><span>投石</span><span>${w.catapult}</span></div>`;
+        <span>冲车</span><span>${w.ram}</span><span>井阑</span><span>${w.tower}</span><span>投石</span><span>${w.catapult}</span>
+        <span>斗舰</span><span>${w.dou || 0}</span><span>楼船</span><span>${w.lou || 0}</span></div>`;
     }
     if (isCity && own) {
       h += `<div class="muted">每月金收入 +${D.goldIncome(city)}　每季兵粮 +${D.foodIncome(city)}　每旬消耗 ${D.upkeep(city)}</div>`;
@@ -134,12 +136,13 @@
     const own = G.isPlayer(u.faction), st = C.stats(u), ty = R.TYPES[u.type];
     let h = `<h2>${esc(u.name)} ${UI.facChip(u.faction)}</h2>`;
     h += `<div class="kv">
-      <span>兵种</span><span>${ty.name}${C.inWater(u) ? '(舟)' : ''}</span><span>适性</span><span>${st.apt}</span>
+      <span>兵种</span><span>${ty.name}${C.inWater(u) ? '(水上)' : ''}</span><span>适性</span><span>${st.apt}</span>
+      <span>舰船</span><span>${R.SHIPS[u.ship || 'zou'].name}</span><span>射程</span><span>${C.rangeOf(u).join('-')}</span>
       <span>兵力</span><span>${U.fmt(u.troops)}</span><span>气力</span><span>${u.energy}</span>
       <span>攻击</span><span>${Math.round(st.atk)}</span><span>防御</span><span>${Math.round(st.def)}</span>
       <span>兵粮</span><span>${U.fmt(u.food)}</span><span>移动</span><span>${Un.mpOf(u)}</span>
       </div>${UI.bar(u.troops, u.maxT)}${UI.bar(u.energy, 100, '#64b5f6')}`;
-    if (u.status) h += `<div class="warn">状态：${u.status.kind === 'confuse' ? '混乱' : '伪报'}（${u.status.turns}旬）</div>`;
+    if (u.status) h += `<div class="warn">状态：${{ confuse: '混乱', false: '伪报', flood: '水困' }[u.status.kind] || '异常'}（${u.status.turns}旬）</div>`;
     if (u.cargo) h += `<div class="muted">运载：金 ${u.cargo.gold || 0}，兵粮 ${u.cargo.food || 0}</div>`;
     h += `<h3>武将</h3><table class="olist">${UI.offHead()}${C.offs(u).map(o => UI.offRow(o)).join('')}</table>`;
     if (own) {
@@ -151,14 +154,20 @@
         <button data-act="uMarch" ${u.status ? 'disabled' : ''} title="设定目的地，之后每回合自动前进">行军</button>
         ${u.dest != null ? '<button data-act="uMarchCancel">取消行军</button>' : ''}</div>
         ${u.dest != null ? `<div class="muted">行军目标：${SG.map.city[u.dest] >= 0 ? esc(G.city(SG.map.city[u.dest]).name) : '(' + H.cr(u.dest).join(',') + ')'}</div>` : ''}`;
-      const tacs = R.TACTICS[u.type];
+      const tacs = C.tacticsOf(u);
       if (tacs.length) {
-        h += `<div class="cmd-group">战法（适性 ${st.apt}）</div><div class="cmds">` + tacs.map(t =>
+        h += `<div class="cmd-group">${st.naval ? '水军战法' : '战法'}（适性 ${st.apt}）</div><div class="cmds">` + tacs.map(t =>
           `<button data-act="uTactic" data-id="${t.id}" ${!can || u.energy < t.en ? 'disabled' : ''} title="气力 ${t.en}，威力 ×${t.mult}">${t.name}<br><small>气${t.en}</small></button>`).join('') + '</div>';
       }
       if (!ty.noAttack) {
         h += `<div class="cmd-group">计略（智 ${st.int}）</div><div class="cmds">` + R.SCHEMES.map(s =>
           `<button data-act="uScheme" data-id="${s.id}" ${!can || u.energy < s.en ? 'disabled' : ''} title="${s.desc}，气力 ${s.en}">${s.name}<br><small>气${s.en}</small></button>`).join('') + '</div>';
+      }
+      if (!ty.noAttack) {
+        h += `<div class="cmd-group">工事（开沟挖坑 · 引水）</div><div class="cmds">` + R.WORKS.map(w => {
+          const e = SG.Works.check(u, w.id), n = e ? 0 : SG.Works.targets(u, w.id).size;
+          return `<button data-act="uWork" data-id="${w.id}" ${e || !n ? 'disabled' : ''} title="${esc(w.desc)}${e ? '\n（' + esc(e) + '）' : !n ? '\n（相邻没有合适的地点）' : ''}\n气力 ${w.en}">${w.name}<br><small>气${w.en}</small></button>`;
+        }).join('') + '</div>';
       }
       if (UI.mode === 'target') h += `<p class="good">请在地图上选择红色高亮的目标（右键 / Esc 取消）</p>`;
       if (UI.mode === 'dest') h += `<p class="good">请在地图上点击行军目的地（都市或任意地点）</p>`;
@@ -167,7 +176,7 @@
   };
 
   // ---------- 选择 / 指令 ----------
-  UI.clearHL = () => { RD.hl.move = null; RD.hl.attack = null; RD.hl.path = null; UI.reach = null; };
+  UI.clearHL = () => { RD.hl.move = null; RD.hl.attack = null; RD.hl.path = null; RD.hl.flood = null; UI.reach = null; };
   UI.select = s => {
     UI.sel = s; UI.mode = 'idle'; UI.pending = null; UI.clearHL();
     RD.hl.sel = s;
@@ -187,11 +196,13 @@
     UI.pending = pending; UI.mode = 'target';
     const set = new Set();
     if (pending.kind === 'attack' || pending.kind === 'tactic') {
-      for (const t of C.targets(u)) {
+      for (const t of C.targets(u, C.tacticRange(u, pending.tactic))) {
         if (pending.tactic && pending.tactic.cityOnly && !t.city) continue;
-        if (u.type === 'ram' && t.unit) continue;
+        if (u.type === 'ram' && t.unit && !C.inWater(u)) continue;
         set.add(H.idx(t.c, t.r));
       }
+    } else if (pending.kind === 'work') {
+      for (const i of SG.Works.targets(u, pending.work.id)) set.add(i);
     } else {
       const sch = pending.scheme;
       for (const [c, r] of H.within(u.c, u.r, sch.range)) {
@@ -209,13 +220,14 @@
   UI.action = (act, ds) => {
     const S = G.S, s = UI.sel;
     const u = s && s.unit != null ? S.units[s.unit] : null;
-    const city = ds.id != null && !isNaN(+ds.id) && act !== 'uTactic' && act !== 'uScheme' ? G.city(+ds.id) : null;
+    const city = ds.id != null && !isNaN(+ds.id) && !act.startsWith('u') ? G.city(+ds.id) : null;
     switch (act) {
       case 'goCity': { const c = G.city(+ds.id); RD.centerOn(c.c, c.r); UI.select({ city: c.id }); break; }
       case 'goUnit': { const x = S.units[+ds.id]; if (x) { RD.centerOn(x.c, x.r); UI.select({ unit: x.id }); } break; }
       case 'uMove': if (u) { UI.clearHL(); UI.startMove(u); UI.refresh(); } break;
       case 'uAttack': if (u) UI.beginTarget(u, { kind: 'attack' }); break;
-      case 'uTactic': if (u) UI.beginTarget(u, { kind: 'tactic', tactic: R.TACTICS[u.type].find(t => t.id === ds.id) }); break;
+      case 'uTactic': if (u) UI.beginTarget(u, { kind: 'tactic', tactic: C.tacticsOf(u).find(t => t.id === ds.id) }); break;
+      case 'uWork': if (u) UI.beginTarget(u, { kind: 'work', work: SG.Works.def(ds.id) }); break;
       case 'uScheme': if (u) UI.beginTarget(u, { kind: 'scheme', scheme: R.SCHEMES.find(t => t.id === ds.id) }); break;
       case 'uMarch': if (u) { UI.clearHL(); UI.mode = 'dest'; UI.refresh(); } break;
       case 'uMarchCancel': if (u) { u.dest = null; UI.refresh(); } break;
@@ -236,6 +248,7 @@
         const p = UI.pending;
         let res;
         if (p.kind === 'scheme') res = C.scheme(u, c, r, p.scheme);
+        else if (p.kind === 'work') res = SG.Works.run(u, p.work.id, i);
         else {
           const tu = G.unitAt(c, r), tc = G.cityAt(c, r);
           res = C.attack(u, tu ? { unit: tu, c, r } : { city: tc, c, r }, p.tactic || null);
@@ -283,9 +296,17 @@
       for (let k = i; k !== -1 && k != null; k = UI.reach.prevs.get(k)) path.push(k);
       RD.hl.path = path;
     } else RD.hl.path = null;
+    RD.hl.flood = null;
+    const ws = G.S.works;
     if (UI.mode === 'target' && u && RD.hl.attack && RD.hl.attack.has(i)) {
       const p = UI.pending, tu = G.unitAt(c, r), tc = G.cityAt(c, r);
-      if (p.kind === 'scheme') {
+      if (p.kind === 'work') {
+        if (p.work.id === 'breach') {
+          const e = SG.Works.estimate(u.faction, i);
+          RD.hl.flood = e.area.land;
+          text = `决堤：水位 ${e.level}，淹没 ${e.area.land.size} 格　预计敌损 ${e.foe} / 我损 ${e.own}`;
+        } else text = `${p.work.name}：${p.work.desc}`;
+      } else if (p.kind === 'scheme') {
         const rate = C.schemeRate(C.stats(u), tu ? C.stats(tu) : tc ? C.cityStats(tc) : null, p.scheme);
         text = `${p.scheme.name}　成功率 ${U.pct(rate)}`;
       } else {
@@ -299,6 +320,13 @@
       else {
         const t = SG.map.t[i];
         text = SG.T_NAMES[t] + (SG.map.road[i] ? '·道路' : '');
+        if (ws.flood[i]) text += `·洪水（${ws.flood[i]}旬）`;
+        if (ws.ditch[i]) text += ws.ditch[i].water ? '·水渠' : '·壕沟';
+        if (ws.dam[i]) {
+          text = `堤坝［${G.facName(ws.dam[i].f)}］水位 ${ws.dam[i].level}/${R.DAM_MAX}`;
+          RD.hl.flood = SG.Works.floodArea(i, ws.dam[i].level).land;
+        }
+        if (SG.Works.trapVisible(i)) text += '·陷坑';
         const pl = SG.map.plot[i];
         const fac = pl >= 0 && G.city(pl).facs.find(f => f.plot === i);
         if (fac) text += `　${G.city(pl).name}·${R.FACILITIES[fac.type].name}`;
@@ -397,6 +425,8 @@
     $('btn-cities').addEventListener('click', () => SG.Dlg.cityList());
     $('btn-factions').addEventListener('click', () => SG.Dlg.factionList());
     $('btn-diplomacy').addEventListener('click', () => SG.Dlg.diplomacy());
+    $('btn-ranks').addEventListener('click', () => SG.Dlg.ranks());
+    $('btn-auto').addEventListener('click', () => SG.Dlg.autoMode());
     $('btn-system').addEventListener('click', () => SG.Dlg.system());
     setInterval(() => { if (UI.logDirty && G.S) UI.renderLog(); }, 300);
   };

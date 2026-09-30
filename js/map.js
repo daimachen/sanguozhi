@@ -1,8 +1,8 @@
 // 地图生成：地形、河流、山脉、道路、都市地块与势力范围
 (function (SG) {
   const H = SG.Hex, U = SG.U;
-  const T = SG.T = { SEA: 0, PLAIN: 1, WASTE: 2, FOREST: 3, HILL: 4, PEAK: 5, RIVER: 6, CITY: 7, GATE: 8 };
-  SG.T_NAMES = ['海', '平原', '荒地', '森林', '山地', '峻岭', '河川', '都市', '关隘'];
+  const T = SG.T = { SEA: 0, PLAIN: 1, WASTE: 2, FOREST: 3, HILL: 4, PEAK: 5, RIVER: 6, CITY: 7, GATE: 8, PORT: 9 };
+  SG.T_NAMES = ['海', '平原', '荒地', '森林', '山地', '峻岭', '河川', '都市', '关隘', '港口'];
   const M = SG.Map = {};
 
   function pointInPoly(x, y, poly) {
@@ -59,7 +59,7 @@
     const D = SG.DATA, N = H.W * H.H;
     const rng = U.seeded(194);
     const map = {
-      t: new Uint8Array(N).fill(T.PLAIN), road: new Uint8Array(N), big: new Uint8Array(N),
+      t: new Uint8Array(N).fill(T.PLAIN), road: new Uint8Array(N), big: new Uint8Array(N), coast: new Uint8Array(N),
       city: new Int16Array(N).fill(-1), plot: new Int16Array(N).fill(-1), region: new Int16Array(N).fill(-1),
       adj: [], places: [],
     };
@@ -98,6 +98,11 @@
     for (let r = 0; r < H.H; r++) for (let c = 0; c < H.W; c++) {
       if (pointInPoly(c + 0.5 * (r & 1) + 0.5, r + 0.5, D.sea)) map.t[H.idx(c, r)] = T.SEA;
     }
+    // 近海（离岸两格内的海域，斗舰、楼船可航行）
+    for (let r = 0; r < H.H; r++) for (let c = 0; c < H.W; c++) {
+      const i = H.idx(c, r);
+      if (map.t[i] === T.SEA && H.within(c, r, 2).some(([nc, nr]) => map.t[H.idx(nc, nr)] !== T.SEA)) map.coast[i] = 1;
+    }
     // 5. 都市与关隘
     D.cities.forEach((d, id) => map.places.push({ id, name: d.name, c: d.c, r: d.r, kind: 'city', size: d.size }));
     D.gates.forEach(d => map.places.push({ id: map.places.length, name: d.name, c: d.c, r: d.r, kind: 'gate', size: 0 }));
@@ -114,6 +119,24 @@
         }
       }
     }
+    // 5b. 港口：吸附到临水的陆地格
+    const landT = [T.PLAIN, T.WASTE, T.FOREST, T.HILL];
+    for (const d of D.ports || []) {
+      let best = null, bd = Infinity;
+      for (const [c, r] of H.within(d.c, d.r, 4)) {
+        const i = H.idx(c, r);
+        if (!landT.includes(map.t[i]) || map.city[i] >= 0) continue;
+        if (map.places.some(p => H.dist(p.c, p.r, c, r) < 2)) continue;
+        if (!H.neighbors(c, r).some(([nc, nr]) => { const tt = map.t[H.idx(nc, nr)]; return tt === T.RIVER || tt === T.SEA; })) continue;
+        const dd = H.dist(d.c, d.r, c, r) + (map.road[i] ? 0 : 0.1);
+        if (dd < bd) { bd = dd; best = [c, r]; }
+      }
+      if (!best) { console.warn('港口无法放置', d.name); continue; }
+      const p = { id: map.places.length, name: d.name, c: best[0], r: best[1], kind: 'port', size: 0, parent: byName[d.city].id };
+      map.places.push(p); byName[p.name] = p;
+      const i = H.idx(p.c, p.r);
+      map.t[i] = T.PORT; map.city[i] = p.id; map.adj[p.id] = new Set();
+    }
     map.byName = byName;
     // 6. 道路
     const roadCost = (endIds) => (ni) => {
@@ -122,7 +145,7 @@
       if (map.city[ni] >= 0 && !endIds.includes(map.city[ni])) return Infinity;
       if (t === T.PEAK) return Infinity;
       if (map.road[ni]) return 0.6;
-      return [Infinity, 1, 1.3, 2, 3, Infinity, map.big[ni] ? 5 : 3, 1, 1][t];
+      return [Infinity, 1, 1.3, 2, 3, Infinity, map.big[ni] ? 5 : 3, 1, 1, 1][t];
     };
     const layRoad = (a, b) => {
       const path = M.astar(H.idx(a.c, a.r), H.idx(b.c, b.r), roadCost([a.id, b.id]));
@@ -134,6 +157,7 @@
       if (via) { layRoad(byName[a], byName[via]); layRoad(byName[via], byName[b]); }
       else layRoad(byName[a], byName[b]);
     }
+    for (const p of map.places) if (p.kind === 'port') layRoad(map.places[p.parent], p);
     // 7. 地块
     for (const p of map.places) {
       if (p.kind !== 'city') continue;
@@ -154,7 +178,7 @@
       for (const [nc, nr] of H.neighbors(c, r)) {
         const ni = H.idx(nc, nr), t = map.t[ni];
         if (t === T.SEA) continue;
-        const k = [0, 1, 1.2, 1.6, 2.2, 5, 2, 1, 1][t] * (map.places[map.region[cur]].kind === 'gate' ? 2.2 : 1);
+        const k = [0, 1, 1.2, 1.6, 2.2, 5, 2, 1, 1, 1][t] * (map.places[map.region[cur]].kind !== 'city' ? 2.2 : 1);
         if (dist[cur] + k < dist[ni]) { dist[ni] = dist[cur] + k; map.region[ni] = map.region[cur]; heap.push(dist[ni], ni); }
       }
     }
@@ -162,17 +186,37 @@
     return map;
   };
 
-  // 部队移动消耗
-  M.moveCost = (i, type) => {
-    const map = SG.map, t = map.t[i];
-    if (t === T.SEA || t === T.PEAK) return Infinity;
-    let k;
-    if (map.road[i]) k = (t === T.RIVER && map.big[i]) ? 4 : 2;
-    else k = [Infinity, 3, 4, 5, 6, Infinity, map.big[i] ? 6 : 5, 3, 3][t];
-    const ty = SG.R.TYPES[type];
+  // 工事状态（壕沟、陷坑、堤坝、洪水）
+  M.works = () => (SG.G && SG.G.S && SG.G.S.works) || null;
+  M.isPlace = i => { const t = SG.map.t[i]; return t === T.CITY || t === T.GATE || t === T.PORT; };
+  // 是否为水面（河川、海、水渠、洪水；堤坝除外）
+  M.isWater = i => {
+    const W = M.works(), t = SG.map.t[i];
+    if (W && W.dam[i]) return false;
+    if (t === T.RIVER || t === T.SEA) return true;
+    if (M.isPlace(i)) return false;
+    return !!(W && ((W.ditch[i] && W.ditch[i].water) || W.flood[i]));
+  };
+  // 部队移动消耗（ship：走舸 zou / 斗舰 dou / 楼船 lou）
+  M.moveCost = (i, type, ship) => {
+    const map = SG.map, t = map.t[i], W = M.works(), R = SG.R;
+    if (t === T.PEAK) return Infinity;
+    if (W && W.dam[i]) return 3;
+    const ty = R.TYPES[type], sh = R.SHIPS[ship || 'zou'];
+    if (t === T.SEA) return map.coast[i] ? sh.sea : Infinity;
+    if (M.isWater(i)) {
+      if (map.road[i] && t === T.RIVER && !(W && W.flood[i])) {
+        if (!map.big[i]) return 2; // 桥
+        return Math.min(4, sh.cost + 1); // 渡口
+      }
+      let k = sh.cost + (map.big[i] && (!ship || ship === 'zou') ? 1 : 0);
+      if (ty && ty.siegeUnit) k += 1;
+      return k;
+    }
+    if (W && W.ditch[i]) return ty && ty.siegeUnit ? Infinity : type === 'horse' ? 9 : 7;
+    let k = map.road[i] ? 2 : [Infinity, 3, 4, 5, 6, Infinity, 5, 3, 3, 3][t];
     if (ty && ty.siegeUnit && !map.road[i] && (t === T.FOREST || t === T.HILL)) k += 3;
     if (type === 'horse' && !map.road[i] && t === T.FOREST) k += 1;
     return k;
   };
-  M.isWater = i => SG.map.t[i] === T.RIVER;
 })(window.SG);

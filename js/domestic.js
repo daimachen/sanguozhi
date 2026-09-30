@@ -20,37 +20,39 @@
 
   // ---------- 预估值 ----------
   D.buildTurns = (o, type) => {
-    const per = (o.s[3] * 0.9 + 10) * (hasSk(o, '能吏') ? 1.5 : 1);
+    const per = (G.st(o, 3) * 0.9 + 10) * (hasSk(o, '能吏') ? 1.5 : 1);
     return Math.max(1, Math.ceil(R.FACILITIES[type].work / per));
   };
   D.recruitAmount = (city, o) => {
     const n = G.facilityCount(city, 'barracks');
-    return Math.round((700 + o.s[4] * 16) * (0.6 + 0.4 * n) * (hasSk(o, '名声') ? 1.5 : 1) / 10) * 10;
+    return Math.round((700 + G.st(o, 4) * 16) * (0.6 + 0.4 * n) * (hasSk(o, '名声') ? 1.5 : 1) / 10) * 10;
   };
   D.recruitCost = amt => Math.round(amt * 0.3);
-  D.troopCap = city => R.CITY_DEFAULT[city.kind === 'gate' ? 'gate' : city.size].maxTroops;
-  D.trainAmount = o => Math.round(6 + o.s[0] / 8);
-  D.patrolAmount = o => Math.round((5 + o.s[4] / 10) * (hasSk(o, '仁政') ? 2 : 1));
+  D.troopCap = city => R.CITY_DEFAULT[city.kind === 'city' ? city.size : city.kind].maxTroops;
+  D.trainAmount = o => Math.round(6 + G.st(o, 0) / 8);
+  D.patrolAmount = o => Math.round((5 + G.st(o, 4) / 10) * (hasSk(o, '仁政') ? 2 : 1));
   D.produceAmount = (city, o, wk) => {
     const W = R.WEAPONS[wk], n = G.facilityCount(city, W.fac);
+    if (W.ship) return 1;
     if (W.siege) return (hasSk(o, '发明') ? 2 : 1);
-    let a = (900 + o.s[3] * 18) * (0.6 + 0.4 * n) * (hasSk(o, '能吏') ? 1.3 : 1);
+    let a = (900 + G.st(o, 3) * 18) * (0.6 + 0.4 * n) * (hasSk(o, '能吏') ? 1.3 : 1);
     if (wk === 'horse' && hasSk(o, '繁殖')) a *= 2;
     return Math.round(a / 10) * 10;
   };
-  D.produceCost = (wk, amt) => R.WEAPONS[wk].siege ? 600 * amt : Math.round(amt * 0.15);
+  D.produceCost = (wk, amt) => R.WEAPONS[wk].siege ? R.WEAPONS[wk].cost * amt : Math.round(amt * 0.15);
 
   // ---------- 指令 ----------
   D.build = (city, o, type) => {
     const e = check(city, o, R.AP.build); if (e) return fail(e);
     const F = R.FACILITIES[type];
+    if (F.water && !G.nearWater(city.id)) return fail('此城不临水域，无法建造船厂');
     if (city.gold < F.cost) return fail('金不足');
     const plots = SG.map.places[city.id].plots;
     const used = new Set(city.facs.map(f => f.plot));
     const plot = plots.find(p => !used.has(p));
     if (plot == null) return fail('没有空余地块');
     payAP(city.faction, R.AP.build);
-    city.gold -= F.cost; o.acted = true;
+    city.gold -= F.cost; o.acted = true; G.merit(o, 10);
     const turns = D.buildTurns(o, type);
     city.facs.push({ type, plot, done: false, left: turns });
     G.log(`${o.name} 于 ${city.name} 开始建设${F.name}（${turns}旬）`, G.isPlayer(city.faction) ? '' : 'l-dim');
@@ -70,7 +72,7 @@
     if (city.troops >= D.troopCap(city)) return fail('兵力已达上限');
     if (city.recruitTurn === G.S.turn && (city.recruitCount || 0) >= 2) return fail('本旬已征兵两次，民力不堪');
     payAP(city.faction, R.AP.recruit);
-    city.gold -= cost; o.acted = true;
+    city.gold -= cost; o.acted = true; G.merit(o, 10);
     city.energy = Math.round((city.energy * city.troops + 50 * amt) / Math.max(1, city.troops + amt));
     city.troops = Math.min(D.troopCap(city), city.troops + amt);
     city.recruitCount = city.recruitTurn === G.S.turn ? (city.recruitCount || 0) + 1 : 1;
@@ -83,7 +85,7 @@
     const e = check(city, o, R.AP.train); if (e) return fail(e);
     if (city.energy >= 100) return fail('气力已满');
     payAP(city.faction, R.AP.train);
-    o.acted = true;
+    o.acted = true; G.merit(o, 10);
     const a = D.trainAmount(o);
     city.energy = Math.min(100, city.energy + a);
     return { ok: true, msg: `${o.name} 训练士兵，气力 +${a}` };
@@ -93,7 +95,7 @@
     const e = check(city, o, R.AP.patrol); if (e) return fail(e);
     if (city.order >= 100) return fail('治安已满');
     payAP(city.faction, R.AP.patrol);
-    o.acted = true;
+    o.acted = true; G.merit(o, 10);
     const a = D.patrolAmount(o);
     city.order = Math.min(100, city.order + a);
     return { ok: true, msg: `${o.name} 巡察城内，治安 +${a}` };
@@ -106,7 +108,7 @@
     const amt = D.produceAmount(city, o, wk), cost = D.produceCost(wk, amt);
     if (city.gold < cost) return fail('金不足');
     payAP(city.faction, R.AP.produce);
-    city.gold -= cost; o.acted = true;
+    city.gold -= cost; o.acted = true; G.merit(o, 10);
     city.w[wk] += amt;
     return { ok: true, msg: `${o.name} 生产${W.name} ${amt}` };
   };
@@ -114,9 +116,9 @@
   D.search = (city, o) => {
     const e = check(city, o, R.AP.search); if (e) return fail(e);
     payAP(city.faction, R.AP.search);
-    o.acted = true;
+    o.acted = true; G.merit(o, 10);
     const hidden = G.freeIn(city.id).filter(x => x.hidden);
-    if (hidden.length && U.chance(0.45 + o.s[2] / 250)) {
+    if (hidden.length && U.chance(0.45 + G.st(o, 2) / 250)) {
       const f = U.pick(hidden);
       f.hidden = false;
       return { ok: true, found: f, msg: `${o.name} 在 ${city.name} 发现了在野武将 ${f.name}！` };
@@ -140,9 +142,9 @@
     }
     if (t.status === 'active' && (t.fixed || G.isRuler(t))) return 0;
     let p;
-    if (t.status === 'free') p = 0.55 + (o.s[4] - 50) / 100;
-    else if (t.status === 'captive') p = 0.2 + (o.s[4] - 50) / 150 + (100 - t.loyalty) / 80 - (t.faction >= 0 && G.fac(t.faction).alive ? 0.15 : 0);
-    else p = (90 - t.loyalty) / 60 + (o.s[4] - 60) / 200;
+    if (t.status === 'free') p = 0.55 + (G.st(o, 4) - 50) / 100;
+    else if (t.status === 'captive') p = 0.2 + (G.st(o, 4) - 50) / 150 + (100 - t.loyalty) / 80 - (t.faction >= 0 && G.fac(t.faction).alive ? 0.15 : 0);
+    else p = (90 - t.loyalty) / 60 + (G.st(o, 4) - 60) / 200;
     if (hasSk(o, '眼力')) p += 0.2;
     return U.clamp(p, 0, 0.95);
   };
@@ -150,14 +152,14 @@
     const e = check(city, o, R.AP.employ); if (e) return fail(e);
     if (t.unit != null) return fail(`${t.name} 正在出征，无法招揽`);
     payAP(city.faction, R.AP.employ);
-    o.acted = true;
+    o.acted = true; G.merit(o, 10);
     const p = D.employRate(o, t);
     if (!U.chance(p)) {
       if (t.status === 'active') t.loyalty = Math.min(100, t.loyalty + 2);
       return { ok: true, success: false, msg: `${t.name} 拒绝了 ${o.name} 的招揽` };
     }
     const oldF = t.faction;
-    t.status = 'active'; t.faction = city.faction; t.city = city.id; t.hidden = false; t.captor = -1; t.fixed = false;
+    t.status = 'active'; t.faction = city.faction; t.city = city.id; t.hidden = false; t.captor = -1; t.fixed = false; t.rank = null;
     t.loyalty = U.clamp(70 + Math.round(G.ruler(city.faction).s[4] / 5), 60, 95); t.acted = true; t.unit = null;
     if (oldF >= 0 && oldF !== city.faction) C.checkFaction(oldF);
     G.log(`${t.name} 加入了 ${G.facName(city.faction)}`, G.isPlayer(city.faction) ? 'l-good' : G.isPlayer(oldF) ? 'l-bad' : 'l-dim');
@@ -195,7 +197,7 @@
       const p = D.employRate(rec, t);
       if (U.chance(p)) {
         const oldF = t.faction;
-        t.status = 'active'; t.faction = fid; t.captor = -1; t.loyalty = U.randInt(65, 80); t.acted = true; t.fixed = false;
+        t.status = 'active'; t.faction = fid; t.captor = -1; t.loyalty = U.randInt(65, 80); t.acted = true; t.fixed = false; t.rank = null;
         G.log(`俘虏 ${t.name} 归降 ${G.facName(fid)}`, G.isPlayer(fid) ? 'l-good' : 'l-dim');
         if (oldF >= 0) C.checkFaction(oldF);
         return { ok: true, success: true, msg: `${t.name} 愿意归降！` };

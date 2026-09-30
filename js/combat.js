@@ -20,23 +20,25 @@
   // 部队能力
   C.stats = u => {
     const offs = C.offs(u), ty = R.TYPES[u.type];
-    const lea = Math.max(...offs.map(G.lea)), war = Math.max(...offs.map(G.war)), int = Math.max(...offs.map(G.int));
-    const apt = ty.apt >= 0 ? C.bestApt(offs, ty.apt) : 'B';
+    const lea = Math.max(...offs.map(o => G.st(o, 0))), war = Math.max(...offs.map(o => G.st(o, 1))), int = Math.max(...offs.map(o => G.st(o, 2)));
+    let apt = ty.apt >= 0 ? C.bestApt(offs, ty.apt) : 'B';
     let atk, def, mult = R.APT_MULT[apt];
-    if (C.inWater(u) && u.type !== 'transport') {
-      const wa = C.bestApt(offs, 5);
-      mult = R.APT_MULT[wa] * (G.hasSkill(offs, '水将') ? 1.3 : 1);
-      atk = R.BOAT.atk; def = R.BOAT.def;
+    const naval = C.inWater(u) && u.type !== 'transport';
+    if (naval) {
+      const sh = R.SHIPS[u.ship || 'zou'];
+      apt = C.bestApt(offs, 5);
+      mult = R.APT_MULT[apt] * (G.hasSkill(offs, '水将') ? 1.3 : 1);
+      atk = sh.atk; def = sh.def;
     } else { atk = ty.atk; def = ty.def; }
     return {
-      offs, lea, war, int, apt,
+      offs, lea, war, int, apt, naval,
       atk: atk * mult * (0.5 + war / 200),
       def: def * mult * (0.5 + lea / 200),
     };
   };
   C.cityStats = city => {
-    const gov = G.governor(city), lea = gov ? gov.s[0] : 30, war = gov ? gov.s[1] : 30, int = gov ? gov.s[2] : 30;
-    const gateK = city.kind === 'gate' ? 1.35 : 1;
+    const gov = G.governor(city), lea = gov ? G.st(gov, 0) : 30, war = gov ? G.st(gov, 1) : 30, int = gov ? G.st(gov, 2) : 30;
+    const gateK = city.kind === 'gate' ? 1.35 : city.kind === 'port' ? 1.1 : 1;
     return {
       offs: G.officersIn(city.id), lea, war, int,
       atk: 60 * (0.5 + war / 200) * gateK,
@@ -56,8 +58,17 @@
     return d >= rng[0] && d <= rng[1];
   };
   // 列出可攻击目标
+  // 射程与可用战法（水上改用水军）
+  C.rangeOf = u => {
+    const ty = R.TYPES[u.type];
+    if (ty.noAttack) return [0, 0];
+    if (C.inWater(u)) return u.type === 'bow' || u.ship === 'lou' ? [1, 2] : [1, 1];
+    return ty.range;
+  };
+  C.tacticsOf = u => (R.TYPES[u.type].noAttack ? [] : C.inWater(u) ? R.TACTICS.navy : R.TACTICS[u.type]);
+  C.tacticRange = (u, tac) => (tac && tac.range ? tac.range : C.rangeOf(u));
   C.targets = (u, rng) => {
-    rng = rng || R.TYPES[u.type].range;
+    rng = rng || C.rangeOf(u);
     const out = [];
     if (R.TYPES[u.type].noAttack) return out;
     for (const k in G.S.units) {
@@ -163,12 +174,12 @@
   // 攻击（tactic 为空则为普通攻击）；返回 {ok,msg}
   C.attack = (u, tgt, tactic) => {
     const ty = R.TYPES[u.type];
-    const rng = ty.range;
+    const rng = C.tacticRange(u, tactic);
     if (u.acted) return { ok: false, msg: '该部队本回合已行动' };
     if (!C.inRange(u, tgt.c, tgt.r, rng)) return { ok: false, msg: '目标不在射程内' };
     if (tactic && u.energy < tactic.en) return { ok: false, msg: '气力不足' };
     if (tactic && tactic.cityOnly && !tgt.city) return { ok: false, msg: '该战法只能对都市使用' };
-    if (u.type === 'ram' && tgt.unit) return { ok: false, msg: '冲车无法攻击部队' };
+    if (u.type === 'ram' && tgt.unit && !C.inWater(u)) return { ok: false, msg: '冲车无法攻击部队' };
     const st = C.stats(u), name = u.name;
     const tName = tgt.unit ? tgt.unit.name : tgt.city.name;
     u.acted = true; u.mp = 0;
@@ -192,7 +203,8 @@
       const d = hitCity(u, st, tgt.city, mult);
       msg = `${name} ${tactic ? '以「' + tactic.name + '」' : ''}攻打 ${tgt.city.name}，歼敌 ${d}${crit ? '（暴击）' : ''}`;
       G.log(msg, cls);
-      if (tgt.city.troops <= 0) C.captureCity(tgt.city, u);
+      C.addMerit(u, d / 60);
+      if (tgt.city.troops <= 0) { C.addMerit(u, 300); C.captureCity(tgt.city, u); }
       return { ok: true, msg };
     }
     const t = tgt.unit;
@@ -231,13 +243,14 @@
     }
     msg = `${name} ${tactic ? '以「' + tactic.name + '」' : ''}攻击 ${tName}，歼敌 ${total}${crit ? '（暴击）' : ''}`;
     G.log(msg, cls);
+    C.addMerit(u, total / 60 + (t.troops <= 0 ? 100 : 0));
     // 单挑
     if (crit && t.troops > 0) {
       const ts = C.stats(t);
       if (st.war >= 70 && ts.war >= 70 && U.chance(0.22)) C.startDuel(u, t);
     }
     // 反击
-    if (!tactic && !ty.ranged && t.troops > 0 && !R.TYPES[t.type].noAttack && t.type !== 'ram' &&
+    if (!tactic && C.rangeOf(u)[1] === 1 && t.troops > 0 && !R.TYPES[t.type].noAttack && t.type !== 'ram' &&
       H.dist(u.c, u.r, t.c, t.r) === 1) {
       const ts = C.stats(t);
       const d = Math.max(1, Math.round(C.damage(t, ts, u, st, 0.5, false) * (0.9 + Math.random() * 0.2)));
@@ -246,6 +259,9 @@
     C.cleanup(u);
     return { ok: true, msg };
   };
+
+  // 功绩：主将全额，副将一半
+  C.addMerit = (u, v) => { u.offs.forEach((id, k) => G.merit(G.off(id), k ? v / 2 : v)); };
 
   // 处理溃灭
   C.cleanup = killer => {
@@ -263,10 +279,10 @@
   };
 
   C.setFire = (i, turns, k) => {
-    const t = SG.map.t[i];
-    if (t === SG.T.RIVER || t === SG.T.SEA) return;
+    const t = SG.map.t[i], water = SG.Map.isWater(i);
+    if (water && !G.unitAt(...H.cr(i))) return; // 水上只有战船可烧
     const ex = G.S.fires.find(f => f.i === i);
-    const tt = turns + (t === SG.T.FOREST ? 1 : 0);
+    const tt = water ? 1 : turns + (t === SG.T.FOREST ? 1 : 0);
     if (ex) { ex.turns = Math.max(ex.turns, tt); ex.k = Math.max(ex.k, k); } else G.S.fires.push({ i, turns: tt, k });
   };
 
@@ -288,7 +304,7 @@
     if (sch.id === 'fire') {
       if (tu && !G.hostile(u.faction, tu.faction)) return { ok: false, msg: '不能对友军放火' };
       if (tc && !C.canHitCity(u, tc)) return { ok: false, msg: '不能对己方都市放火' };
-      if (SG.Map.isWater(H.idx(c, r))) return { ok: false, msg: '水上无法放火' };
+      if (SG.Map.isWater(H.idx(c, r)) && !tu) return { ok: false, msg: '水上无船可烧' };
     }
     const tSt = tu ? C.stats(tu) : tc ? C.cityStats(tc) : null;
     const p = C.schemeRate(st, tSt, sch);
@@ -305,7 +321,8 @@
       C.setFire(H.idx(c, r), 2, G.hasSkill(st.offs, '火神') ? 2 : 1);
       SG.fx(c, r, '火计!', '#ff7043');
     } else {
-      tu.status = { kind: sch.id, turns: sch.id === 'confuse' ? U.randInt(1, 2) : 1 };
+      tu.status = { kind: sch.id, turns: (sch.id === 'confuse' ? U.randInt(1, 2) : 1) + (G.isPlayer(tu.faction) && !G.isPlayer(u.faction) ? 1 : 0) };
+      C.addMerit(u, 30);
       if (sch.id === 'false') tu.energy = Math.max(0, tu.energy - 20);
       SG.fx(c, r, sch.id === 'confuse' ? '混乱' : '伪报', '#ce93d8');
     }
@@ -328,7 +345,7 @@
   C.captureOrFlee = (o, captorF, c, r, pCapture) => {
     const hold = captorF >= 0 ? C.nearestCity(captorF, c, r) : null;
     if (hold && o.skill !== '遁走' && U.chance(pCapture)) {
-      o.status = 'captive'; o.captor = captorF; o.city = hold.id; o.unit = null;
+      o.status = 'captive'; o.captor = captorF; o.city = hold.id; o.unit = null; o.rank = null;
       G.log(`${o.name} 被 ${G.facName(captorF)} 俘虏！`, G.isPlayer(o.faction) ? 'l-bad' : G.isPlayer(captorF) ? 'l-good' : 'l-dim');
       if (G.isRuler(o)) C.rulerLost(o.faction);
       return true;
@@ -398,6 +415,7 @@
       city.troops += u.troops;
       city.food += u.food;
     }
+    if (u.ship && u.ship !== 'zou') city.w[u.ship] = (city.w[u.ship] || 0) + 1;
     const wk = R.TYPES[u.type].weapon;
     if (wk) city.w[wk] += R.WEAPONS[wk].siege ? 1 : Math.max(0, u.troops);
     if (u.cargo) {
@@ -441,7 +459,7 @@
     for (const o of G.S.officers) {
       if (o.faction === fid && (o.status === 'active' || o.status === 'captive')) {
         if (o.status === 'active') { o.status = 'free'; o.hidden = false; }
-        o.faction = -1; o.loyalty = 100; o.fixed = false;
+        o.faction = -1; o.loyalty = 100; o.fixed = false; o.rank = null;
       }
       if (o.status === 'captive' && o.captor === fid) { o.status = o.faction >= 0 ? 'active' : 'free'; o.captor = -1; }
     }

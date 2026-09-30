@@ -16,6 +16,7 @@
     if (!cnt('smithy') && city.size >= 2) return 'smithy';
     if (!cnt('stable') && city.size >= 3) return 'stable';
     if (!cnt('workshop') && city.size >= 2 && AI.isFront(city) && cnt('market') >= 2) return 'workshop';
+    if (!cnt('dockyard') && city.size >= 2 && G.nearWater(city.id) && cnt('market') >= 2 && cnt('barracks')) return 'dockyard';
     if (cnt('market') <= cnt('farm')) return 'market';
     return 'farm';
   };
@@ -31,7 +32,11 @@
     for (let guard = 0; guard < 8; guard++) {
       if (f.ap < reserve || !G.idleIn(city.id).length) break;
       let done = false;
-      const tryDo = (fn) => { const r = fn(); if (r && r.ok) done = true; return done; };
+      const tryDo = (fn) => {
+        const r = fn();
+        if (r && r.ok) { done = true; if (r.msg && G.isPlayer(city.faction)) G.log(`［托管·${city.name}］${r.msg}`, 'l-dim'); }
+        return done;
+      };
       const building = city.facs.some(x => !x.done);
       const freeSlot = SG.map.places[city.id].plots.length > city.facs.length;
       const wsum = city.w.spear + city.w.halberd + city.w.crossbow + city.w.horse;
@@ -50,6 +55,12 @@
       if (!done) {
         const cand = G.S.officers.filter(o => o.status === 'free' && !o.hidden && G.city(o.city).faction === city.faction);
         if (cand.length) tryDo(() => D.employ(city, by(4), cand[0]));
+      }
+      if (!done && G.facilityCount(city, 'dockyard') && city.w.dou + city.w.lou < 2 && city.gold > 1500)
+        tryDo(() => D.produce(city, by(3), city.gold > 3000 ? 'lou' : 'dou'));
+      if (!done) {
+        const low = G.officersIn(city.id).find(o => o.loyalty < 70 && !o.fixed);
+        if (low && city.gold > 800) tryDo(() => D.reward(city, low));
       }
       if (!done && U.chance(0.5)) tryDo(() => D.search(city, by(2)));
       if (!done) break;
@@ -83,7 +94,8 @@
       if (made === 0 && target.faction >= 0 && city.w.ram > 0 && target.dur > 1500 && U.chance(0.4)) type = 'ram';
       const food = Math.min(city.food - 3000, Math.round(troops * 1.1));
       if (food < troops * 0.4) break;
-      const r = Un.create(city, { offs: offs.map(o => o.id), type, troops, food, target: target.id });
+      const ship = city.w.lou > 0 ? 'lou' : city.w.dou > 0 ? 'dou' : 'zou';
+      const r = Un.create(city, { offs: offs.map(o => o.id), type, troops, food, ship, target: target.id });
       if (!r.ok) break;
       G.fac(fid).ap -= R.AP.march;
       avail -= troops; made++;
@@ -154,10 +166,11 @@
   AI.bestAction = u => {
     let best = null;
     const st = C.stats(u);
-    for (const t of C.targets(u)) {
-      const tacs = [null, ...R.TACTICS[u.type].filter(x => x.en <= u.energy && (!x.cityOnly || t.city))];
-      for (const tac of tacs) {
-        if (u.type === 'ram' && t.unit) continue;
+    const tacList = [null, ...C.tacticsOf(u).filter(x => x.en <= u.energy)];
+    for (const tac of tacList) for (const t of C.targets(u, C.tacticRange(u, tac))) {
+      {
+        if (tac && tac.cityOnly && !t.city) continue;
+        if (u.type === 'ram' && t.unit && !C.inWater(u)) continue;
         const p = C.preview(u, t, tac);
         let s = p.rate * p.dmg;
         if (t.city) s *= (t.city.id === u.target ? 1.5 : 1.1) + (p.dur ? p.dur / 800 : 0);
@@ -187,7 +200,8 @@
   };
 
   AI.unitTurn = u => {
-    if (!G.S.units[u.id] || u.status) return;
+    if (!G.S.units[u.id] || u.status || u.acted) return;
+    if (SG.Works.aiConsider(u)) return;
     const fid = u.faction;
     let tgt = u.target != null ? G.city(u.target) : null;
     // 运输队
@@ -224,7 +238,7 @@
     }
     // 先看当前位置能否攻击
     let act = AI.bestAction(u);
-    const inRangeOfTarget = tgt && C.inRange(u, tgt.c, tgt.r, R.TYPES[u.type].range);
+    const inRangeOfTarget = tgt && C.inRange(u, tgt.c, tgt.r, C.rangeOf(u));
     if (!act || (!inRangeOfTarget && !(act.t && act.t.unit && H.dist(act.t.c, act.t.r, u.c, u.r) <= 1))) {
       // 移动
       let goal = null;
@@ -239,7 +253,8 @@
       if (!G.S.units[u.id]) return;
       act = AI.bestAction(u);
     }
-    AI.doAction(u, act);
+    if (act) AI.doAction(u, act);
+    else if (u.guard) SG.Works.aiTrap(u);
   };
 
   // ---------- 俘虏、挖角、外交 ----------
@@ -268,6 +283,7 @@
   };
   AI.diplomacy = fid => {
     const S = G.S, p = S.player;
+    if (fid === p) return;
     if (!G.fac(p).alive || !U.chance(0.04)) return;
     const rel = G.rel(fid, p);
     if (G.allied(fid, p) || G.truce(fid, p)) return;
@@ -281,6 +297,7 @@
     const f = G.fac(fid);
     if (!f.alive) return;
     AI.handleCaptives(fid);
+    if (G.S.xun === 0 || G.S.turn <= 1) SG.Ranks.autoAssign(fid);
     const cities = U.shuffle(G.realCitiesOf(fid));
     // 前线优先
     cities.sort((a, b) => (AI.isFront(b) ? 1 : 0) - (AI.isFront(a) ? 1 : 0));

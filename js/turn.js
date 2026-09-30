@@ -5,15 +5,24 @@
 
   // 火焰、都市反击、部队补给
   TN.combatUpkeep = () => {
-    const S = G.S;
+    const S = G.S, newFires = [];
     for (const f of S.fires) {
       const [c, r] = H.cr(f.i);
-      const u = G.unitAt(c, r);
+      const u = G.unitAt(c, r), water = SG.Map.isWater(f.i), wind = S.eastWind > S.turn;
       if (u) {
-        const d = Math.round(U.randInt(300, 650) * f.k * (SG.map.t[f.i] === SG.T.FOREST ? 1.3 : 1));
+        let d = U.randInt(300, 650) * f.k * (SG.map.t[f.i] === SG.T.FOREST ? 1.3 : 1);
+        if (water) d *= (u.ship === 'lou' ? 1.8 : 1.5) * (wind ? 2 : 1);
+        d = Math.round(d);
         u.troops -= d; u.energy = Math.max(0, u.energy - 10);
-        SG.fx(c, r, '火 -' + d, '#ff7043');
-        if (G.isPlayer(u.faction)) G.log(`${u.name} 遭火焰焚烧，损失 ${d}`, 'l-bad');
+        SG.fx(c, r, (water ? '战船起火 -' : '火 -') + d, '#ff7043');
+        if (G.isPlayer(u.faction)) G.log(`${u.name} ${water ? '战船' : ''}遭火焰焚烧，损失 ${d}`, 'l-bad');
+        // 战船相连，火势蔓延
+        if (water) {
+          for (const [nc, nr] of H.neighbors(c, r)) {
+            const o = G.unitAt(nc, nr), j = H.idx(nc, nr);
+            if (o && SG.Map.isWater(j) && !S.fires.some(x => x.i === j) && U.chance(wind ? 0.75 : 0.35)) newFires.push([j, f.k]);
+          }
+        }
       }
       const city = G.cityAt(c, r);
       if (city) {
@@ -27,6 +36,7 @@
       f.turns--;
     }
     S.fires = S.fires.filter(f => f.turns > 0);
+    for (const [j, k] of newFires) { C.setFire(j, 1, k); const [c, r] = H.cr(j); SG.fx(c, r, '火势蔓延', '#ff7043'); }
     // 都市、关隘射击相邻敌军
     for (const city of S.cities) {
       if (city.faction < 0 || city.troops <= 0) continue;
@@ -78,13 +88,15 @@
     const S = G.S;
     TN.combatUpkeep();
     D.endRound();
+    SG.Works.endRound();
     SG.Dip.endRound();
     TN.advanceDate();
     D.income();
     TN.officersUpkeep();
+    if (S.xun === 0) { SG.Ranks.checkTitles(); SG.Events.check(); }
     for (const f of S.factions) {
       if (!f.alive) continue;
-      f.ap = Math.min(R.AP_MAX, f.ap + R.apGain(G.realCitiesOf(f.id).length));
+      f.ap = Math.min(R.AP_MAX, f.ap + R.apGain(G.realCitiesOf(f.id).length) + SG.Ranks.apBonus(f.id));
     }
     for (const f of S.factions) if (f.alive) C.checkFaction(f.id);
   };
@@ -114,12 +126,25 @@
     }
   };
 
+  // 托管：内政托管 = 所有都市按「委任」处理，外加人事；全托管 = 与电脑势力相同
+  TN.runAuto = pf => {
+    const S = G.S, mode = S.auto || 'manual';
+    if (mode === 'full') { SG.AI.runFaction(pf); return; }
+    if (mode === 'domestic') {
+      SG.AI.handleCaptives(pf);
+      if (S.xun === 0) SG.Ranks.autoAssign(pf);
+    }
+    const cities = G.realCitiesOf(pf).filter(c => mode === 'domestic' || c.delegate);
+    cities.sort((a, b) => (SG.AI.isFront(b) ? 1 : 0) - (SG.AI.isFront(a) ? 1 : 0));
+    for (const city of cities) SG.AI.domestic(city, 30);
+  };
+
   // 玩家结束回合
   TN.endPlayerTurn = () => {
     const S = G.S;
     S.proposals = S.proposals || [];
     const pf = S.player;
-    for (const city of G.realCitiesOf(pf)) if (city.delegate) SG.AI.domestic(city, 20);
+    TN.runAuto(pf);
     for (const u of G.unitsOf(pf)) TN.autoMarch(u);
     const order = U.shuffle(S.factions.filter(f => f.alive && f.id !== pf).map(f => f.id));
     for (const fid of order) {

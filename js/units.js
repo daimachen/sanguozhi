@@ -3,9 +3,10 @@
   const U = SG.U, R = SG.R, H = SG.Hex, G = SG.G, C = SG.C, T = SG.T;
   const Un = SG.Units = {};
 
+  // 统兵上限由官职决定，君主 15000
   Un.maxTroops = o => {
-    const base = (3000 + o.s[0] * 90) * (G.isRuler(o) ? 1.2 : 1);
-    return Math.min(15000, Math.round(base / 100) * 100);
+    if (G.isRuler(o)) return 15000;
+    return R.GRADE_CAP[G.grade(o)] + (o.s[0] >= 85 ? 1000 : 0);
   };
   Un.mpOf = u => R.TYPES[u.type].mp + (G.hasSkill(C.offs(u), '强行') ? 4 : 0);
 
@@ -28,6 +29,8 @@
       if (city.w[wk] < need) return { ok: false, msg: `${R.WEAPONS[wk].name}不足` };
     }
     const cargo = cfg.cargo || null;
+    const ship = cfg.ship && cfg.ship !== 'zou' ? cfg.ship : 'zou';
+    if (ship !== 'zou' && !(city.w[ship] > 0)) return { ok: false, msg: `${R.SHIPS[ship].name}不足` };
     const food = Math.floor(cfg.food || 0);
     const needFood = food + (cargo ? cargo.food || 0 : 0);
     if (needFood > city.food) return { ok: false, msg: '兵粮不足' };
@@ -35,16 +38,17 @@
     if (cargo && cargo.w) for (const k in cargo.w) if (cargo.w[k] > city.w[k]) return { ok: false, msg: '兵装不足' };
     const exits = Un.exitHexes(city);
     if (!exits.length) return { ok: false, msg: '城外没有可出阵的空地' };
-    const [c, r] = exits.sort((a, b) => SG.Map.moveCost(H.idx(...a), cfg.type) - SG.Map.moveCost(H.idx(...b), cfg.type))[0];
+    const [c, r] = exits.sort((a, b) => SG.Map.moveCost(H.idx(...a), cfg.type, ship) - SG.Map.moveCost(H.idx(...b), cfg.type, ship))[0];
     // 扣除
     city.troops -= troops; city.food -= needFood;
     if (wk) city.w[wk] -= R.WEAPONS[wk].siege ? 1 : troops;
+    if (ship !== 'zou') city.w[ship] -= 1;
     if (cargo) { city.gold -= cargo.gold || 0; if (cargo.w) for (const k in cargo.w) city.w[k] -= cargo.w[k]; }
     const id = G.S.nextUnit++;
     const u = {
       id, name: offs[0].name + '队', faction: city.faction, c, r, type: cfg.type, troops, maxT: Math.max(troops, 1),
       food, energy: city.energy, offs: offs.map(o => o.id), mp: 0, acted: false, moved: false, status: null,
-      cargo, target: cfg.target ?? null, home: city.id,
+      cargo, ship, target: cfg.target ?? null, home: city.id,
     };
     u.mp = Un.mpOf(u);
     G.S.units[id] = u;
@@ -75,7 +79,7 @@
       const [c, r] = H.cr(cur);
       for (const [nc, nr] of H.neighbors(c, r)) {
         const ni = H.idx(nc, nr);
-        let k = SG.Map.moveCost(ni, u.type);
+        let k = SG.Map.moveCost(ni, u.type, u.ship);
         if (!isFinite(k)) continue;
         const nd = cc + k;
         if (nd > u.mp) continue;
@@ -105,11 +109,16 @@
   Un.moveTo = (u, idx, reach) => {
     reach = reach || Un.reachable(u);
     if (!reach.has(idx)) return { ok: false, msg: '无法移动到该处' };
-    const [c, r] = H.cr(idx);
-    const path = [];
+    let path = [];
     for (let i = idx; i !== -1 && i != null; i = reach.prevs.get(i)) path.push(i);
-    u.anim = { path: path.reverse(), t: performance.now() };
+    path.reverse();
+    // 陷坑：踏入即停
+    const tk = SG.Works ? SG.Works.trapOnPath(u, path) : -1;
+    if (tk > 0) { path = path.slice(0, tk + 1); idx = path[tk]; }
+    const [c, r] = H.cr(idx);
+    u.anim = { path, t: performance.now() };
     u.c = c; u.r = r; u.moved = true; u.mp = 0;
+    if (tk > 0) { SG.Works.spring(u, idx); return { ok: true, trapped: true }; }
     const cid = SG.map.city[idx];
     if (cid >= 0) {
       const city = G.city(cid);
@@ -130,7 +139,7 @@
   Un.pathTo = (u, goal) => {
     const [gc, gr] = H.cr(goal);
     const costFn = (ni) => {
-      const k = SG.Map.moveCost(ni, u.type);
+      const k = SG.Map.moveCost(ni, u.type, u.ship);
       const cid = SG.map.city[ni];
       if (cid >= 0 && ni !== goal) {
         const city = G.city(cid);

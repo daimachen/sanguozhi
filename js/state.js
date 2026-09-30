@@ -28,6 +28,19 @@
   };
   G.lea = o => o.s[0]; G.war = o => o.s[1]; G.int = o => o.s[2]; G.pol = o => o.s[3]; G.cha = o => o.s[4];
   G.hasSkill = (offs, sk) => offs.some(o => o.skill === sk);
+  // 官职（仅对在任的现役武将有效）
+  G.rank = o => (o.rank && o.status === 'active' && o.faction >= 0 && !G.isRuler(o) ? R.RANK[o.rank] : null);
+  G.grade = o => { const r = G.rank(o); return r ? r.grade : 0; };
+  // 含官职加成的能力值（k: 0统 1武 2智 3政 4魅）
+  G.st = (o, k) => { const r = G.rank(o); return o.s[k] + (r ? r.bonus[k] : 0); };
+  G.merit = (o, v) => { if (o && o.status === 'active' && o.faction >= 0) o.merit = (o.merit || 0) + Math.round(v); };
+  G.title = fid => R.TITLES[G.S.factions[fid].title || 0];
+  G.titleName = fid => G.title(fid).name;
+  G.nearWater = cid => {
+    const p = SG.map.places[cid];
+    if (p.water == null) p.water = H.within(p.c, p.r, 3).some(([c, r]) => { const t = SG.map.t[H.idx(c, r)]; return t === SG.T.RIVER || t === SG.T.SEA; });
+    return p.water;
+  };
   G.ruler = fid => G.S.officers[G.S.factions[fid].ruler];
   G.isRuler = o => o.faction >= 0 && G.S.factions[o.faction].ruler === o.id;
   G.dateStr = () => R.dateStr(G.S);
@@ -73,9 +86,10 @@
   G.newGame = playerRuler => {
     const sc = SG.DATA.scenario, map = SG.map || SG.Map.build();
     const S = G.S = {
-      ver: 1, scenario: sc.name, year: sc.year, month: sc.month, xun: 0, turn: 1,
+      ver: 2, scenario: sc.name, year: sc.year, month: sc.month, xun: 0, turn: 1,
       player: -1, factions: [], cities: [], officers: [], units: {}, nextUnit: 1,
       fires: [], log: [], rel: {}, ally: {}, truce: {}, proposals: [], over: false,
+      works: { ditch: {}, trap: {}, dam: {}, flood: {} }, eventsDone: {}, eventQueue: [], auto: 'manual', eastWind: 0,
     };
     const raw = G.parseOfficers(), offByName = {};
     raw.forEach(o => { offByName[o.name] = o; });
@@ -90,8 +104,8 @@
     S.factions.forEach(f => { facByRuler[raw[f.ruler].name] = f.id; });
     // 都市
     for (const p of map.places) {
-      const def = R.CITY_DEFAULT[p.kind === 'gate' ? 'gate' : p.size];
-      const owner = sc.factions.findIndex(f => f.cities.includes(p.name));
+      const def = R.CITY_DEFAULT[p.kind === 'city' ? p.size : p.kind];
+      const owner = sc.factions.findIndex(f => f.cities.includes(p.kind === 'port' ? map.places[p.parent].name : p.name));
       const ov = sc.cityInit[p.name] || {};
       const c = {
         id: p.id, name: p.name, kind: p.kind, size: p.size, c: p.c, r: p.r, faction: owner,
@@ -100,10 +114,11 @@
         troops: ov.troops ?? (owner >= 0 ? def.troops : 0),
         energy: 80, order: owner >= 0 ? 80 : 60, dur: def.dur, maxDur: def.dur,
         w: { spear: ov.spear ?? def.spear, halberd: ov.halberd ?? def.halberd, crossbow: ov.crossbow ?? def.crossbow,
-          horse: ov.horse ?? def.horse, ram: 0, tower: 0, catapult: 0 },
+          horse: ov.horse ?? def.horse, ram: 0, tower: 0, catapult: 0, dou: def.dou || 0, lou: def.lou || 0 },
         facs: [], delegate: false,
       };
-      if (owner < 0) { for (const k in c.w) c.w[k] = Math.round(c.w[k] / 4); }
+      if (p.kind === 'city' && p.size >= 2 && G.nearWater(p.id)) c.w.dou = 1;
+      if (owner < 0) { for (const k in c.w) c.w[k] = Math.floor(c.w[k] / 4); }
       if (p.kind === 'city') {
         def.facs.forEach((type, k) => { if (p.plots[k] != null) c.facs.push({ type, plot: p.plots[k], done: true, prog: 0, work: 0 }); });
       }
@@ -116,7 +131,8 @@
       const off = {
         id: o.id, name: o.name, s: o.s, apt: o.apt, skill: o.skill, fixed: o.fixed,
         faction: fid ?? -1, city: city ? city.id : 0, loyalty: 100, status: 'active', hidden: false,
-        appear: o.appear, acted: false, unit: null, captor: -1,
+        appear: o.appear, acted: false, unit: null, captor: -1, rank: null,
+        merit: Math.max(0, Math.round(((o.s[0] + o.s[1] + o.s[2] + o.s[3]) / 4 + Math.max(o.s[0], o.s[1], o.s[2]) * 0.8 - 100) * 70)),
       };
       if (off.faction < 0) {
         off.status = o.appear > S.year ? 'unborn' : 'free';
@@ -127,6 +143,13 @@
       S.officers.push(off);
     }
     for (const f of S.factions) { S.officers[f.ruler].loyalty = 100; S.officers[f.ruler].fixed = true; }
+    // 爵位与官职
+    for (const f of S.factions) {
+      const n = S.cities.filter(c => c.faction === f.id && c.kind === 'city').length;
+      f.title = 0;
+      R.TITLES.forEach((t, k) => { if (n >= t.need) f.title = k; });
+      SG.Ranks.autoAssign(f.id, true);
+    }
     // 初始关系：同盟雏形
     for (let a = 0; a < S.factions.length; a++) for (let b = a + 1; b < S.factions.length; b++) S.rel[G.relKey(a, b)] = 30;
     S.player = facByRuler[playerRuler] ?? 0;
@@ -140,20 +163,22 @@
     try {
       localStorage.setItem(G.SAVE_KEY + slot, JSON.stringify(G.S));
       localStorage.setItem(G.SAVE_KEY + slot + '_meta', JSON.stringify({
-        date: G.dateStr(), fac: G.S.factions[G.S.player].name, at: new Date().toLocaleString(),
+        date: G.dateStr(), fac: G.S.factions[G.S.player].name, at: new Date().toLocaleString(), ver: G.S.ver,
       }));
       return true;
     } catch (e) { console.error(e); return false; }
   };
   G.saveMeta = slot => {
-    try { return JSON.parse(localStorage.getItem(G.SAVE_KEY + slot + '_meta') || 'null'); } catch (e) { return null; }
+    try { const m = JSON.parse(localStorage.getItem(G.SAVE_KEY + slot + '_meta') || 'null'); return m && m.ver === 2 ? m : null; } catch (e) { return null; }
   };
   G.load = slot => {
     try {
       const txt = localStorage.getItem(G.SAVE_KEY + slot);
       if (!txt) return false;
       if (!SG.map) SG.Map.build();
-      G.S = JSON.parse(txt);
+      const st = JSON.parse(txt);
+      if (st.ver !== 2) return false;
+      G.S = st;
       return true;
     } catch (e) { console.error(e); return false; }
   };

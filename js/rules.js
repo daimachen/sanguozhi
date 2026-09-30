@@ -31,9 +31,11 @@
     halberd: { name: '戟', fac: 'smithy', siege: false },
     crossbow: { name: '弩', fac: 'smithy', siege: false },
     horse: { name: '马', fac: 'stable', siege: false },
-    ram: { name: '冲车', fac: 'workshop', siege: true },
-    tower: { name: '井阑', fac: 'workshop', siege: true },
-    catapult: { name: '投石', fac: 'workshop', siege: true },
+    ram: { name: '冲车', fac: 'workshop', siege: true, cost: 600 },
+    tower: { name: '井阑', fac: 'workshop', siege: true, cost: 700 },
+    catapult: { name: '投石', fac: 'workshop', siege: true, cost: 800 },
+    dou: { name: '斗舰', fac: 'dockyard', siege: true, cost: 500, ship: true },
+    lou: { name: '楼船', fac: 'dockyard', siege: true, cost: 900, ship: true },
   };
 
   // 战法
@@ -80,8 +82,9 @@
     smithy: { name: '锻冶所', ch: '锻', cost: 600, work: 220, desc: '可生产枪、戟、弩' },
     stable: { name: '厩舍', ch: '厩', cost: 600, work: 220, desc: '可生产军马' },
     workshop: { name: '工房', ch: '工', cost: 800, work: 260, desc: '可生产冲车、井阑、投石' },
+    dockyard: { name: '造船厂', ch: '船', cost: 700, work: 240, desc: '可生产斗舰、楼船（须临近水域）', water: true },
   };
-  R.FAC_ORDER = ['market', 'farm', 'barracks', 'smithy', 'stable', 'workshop'];
+  R.FAC_ORDER = ['market', 'farm', 'barracks', 'smithy', 'stable', 'workshop', 'dockyard'];
 
   // 特技
   R.SKILLS = {
@@ -137,7 +140,72 @@
       facs: ['market', 'farm', 'farm', 'barracks', 'smithy'] },
     1: { maxTroops: 40000, gold: 1000, food: 15000, troops: 6000, dur: 2200, slots: 8, spear: 3000, halberd: 2000, crossbow: 2000, horse: 1000,
       facs: ['market', 'farm', 'barracks'] },
+    port: { maxTroops: 20000, gold: 0, food: 8000, troops: 3000, dur: 2000, slots: 0, spear: 2000, halberd: 1000, crossbow: 2000, horse: 0, dou: 2, lou: 0, facs: [] },
     gate: { maxTroops: 30000, gold: 0, food: 12000, troops: 6000, dur: 5000, slots: 0, spear: 3000, halberd: 3000, crossbow: 3000, horse: 0, facs: [] },
+  };
+
+  // ---------- 舰船与水军 ----------
+  R.SHIPS = {
+    zou: { name: '走舸', atk: 42, def: 40, cost: 5, sea: Infinity },
+    dou: { name: '斗舰', atk: 66, def: 62, cost: 3, sea: 4 },
+    lou: { name: '楼船', atk: 78, def: 86, cost: 4, sea: 4, range: [1, 2] },
+  };
+  R.TACTICS.navy = [
+    { id: 'chongtu', name: '冲突', en: 12, mult: 1.35, push: 1 },
+    { id: 'shuiluan', name: '乱射', en: 12, mult: 1.15, splash: 0.6, range: [1, 2] },
+    { id: 'huochuan', name: '火船', en: 15, mult: 0.9, fire: true, range: [1, 2] },
+  ];
+
+  // ---------- 官职 ----------
+  // 品级 0=无官；统兵上限、所需功绩、军职加成（统、武）
+  R.GRADE_NAME = ['无官', '一品', '二品', '三品', '四品', '五品', '六品', '七品'];
+  R.GRADE_CAP = [7000, 14000, 13000, 12000, 11000, 10000, 9000, 8000];
+  R.GRADE_MERIT = [0, 16000, 11000, 7000, 4000, 2000, 1000, 300];
+  R.GRADE_BONUS = [[0, 0], [5, 3], [4, 2], [3, 2], [2, 1], [1, 1], [1, 0], [0, 0]];
+  R.RANKS = [
+    { id: 'djj', name: '大将军', grade: 1 },
+    { id: 'pq', name: '骠骑将军', grade: 2 }, { id: 'cq', name: '车骑将军', grade: 2 },
+    { id: 'qj', name: '前将军', grade: 3 }, { id: 'hj', name: '后将军', grade: 3 }, { id: 'zj', name: '左将军', grade: 3 }, { id: 'yj', name: '右将军', grade: 3 },
+    { id: 'zdj', name: '征东将军', grade: 4 }, { id: 'zxj', name: '征西将军', grade: 4 }, { id: 'znj', name: '征南将军', grade: 4 }, { id: 'zbj', name: '征北将军', grade: 4 },
+    { id: 'hdj', name: '镇东将军', grade: 5 }, { id: 'hxj', name: '镇西将军', grade: 5 }, { id: 'hnj', name: '镇南将军', grade: 5 }, { id: 'hbj', name: '镇北将军', grade: 5 },
+    { id: 'adj', name: '安东将军', grade: 6 }, { id: 'axj', name: '安西将军', grade: 6 }, { id: 'anj', name: '安南将军', grade: 6 }, { id: 'abj', name: '安北将军', grade: 6 },
+    { id: 'pjj', name: '偏将军', grade: 7, slots: 8 }, { id: 'bjj', name: '裨将军', grade: 7, slots: 8 },
+    { id: 'js', name: '军师', grade: 3, civ: true, bonus: [0, 0, 5, 0, 0], desc: '势力行动力每旬 +10' },
+    { id: 'sls', name: '尚书令', grade: 3, civ: true, bonus: [0, 0, 0, 5, 0] },
+    { id: 'sz', name: '侍中', grade: 4, civ: true, bonus: [0, 0, 3, 3, 0] },
+    { id: 'zsl', name: '中书令', grade: 5, civ: true, bonus: [0, 0, 2, 2, 2] },
+  ];
+  R.RANK = {};
+  for (const r of R.RANKS) {
+    R.RANK[r.id] = r;
+    if (!r.bonus) { const b = R.GRADE_BONUS[r.grade]; r.bonus = [b[0], b[1], 0, 0, 0]; }
+    r.slots = r.slots || 1;
+  }
+  // 君主爵位：所需都市数、可授予的最高品级、每旬额外行动力
+  R.TITLES = [
+    { name: '太守', need: 0, maxGrade: 6, ap: 0 },
+    { name: '刺史', need: 3, maxGrade: 5, ap: 5 },
+    { name: '州牧', need: 6, maxGrade: 4, ap: 10 },
+    { name: '公', need: 10, maxGrade: 3, ap: 20 },
+    { name: '王', need: 16, maxGrade: 2, ap: 30 },
+    { name: '皇帝', need: 24, maxGrade: 1, ap: 40 },
+  ];
+
+  // ---------- 工事（开沟、挖坑、引水） ----------
+  R.WORKS = [
+    { id: 'ditch', name: '开沟', en: 10, minTroops: 1000, desc: '在相邻平地挖掘壕沟：敌军难以通过、兵器无法通行；与河流相连会灌满成为水渠，可引水' },
+    { id: 'trap', name: '陷坑', en: 10, minTroops: 1000, desc: '在相邻空地设置隐蔽陷坑，敌军踏入即受损、气力大减并停止移动' },
+    { id: 'dam', name: '筑堤', en: 20, minTroops: 3000, desc: '在相邻河道筑堤蓄水，水位逐旬上涨（六至九月雨季加倍）' },
+    { id: 'breach', name: '决堤', en: 10, minTroops: 0, desc: '掘开相邻堤坝，洪水沿河道与水渠泛滥，水淹低地部队与城池' },
+    { id: 'fill', name: '填沟', en: 10, minTroops: 1000, desc: '填平相邻的壕沟或水渠' },
+  ];
+  R.DAM_MAX = 10;
+  R.MAX_TRAPS = 12;
+
+  R.AUTO_MODES = {
+    manual: { name: '手动', desc: '所有内政、军事均由主公亲自下令（仍可对单城「委任」）' },
+    domestic: { name: '内政托管', desc: '开发、征兵、训练、巡察、生产、搜索、登用、俘虏、褒赏、官职任命交由部下自动处理；主公专注出征与指挥部队' },
+    full: { name: '全托管', desc: '内政与军事全部交由电脑按照 AI 方针执行（可随时切回）' },
   };
 
   R.XUN = ['上旬', '中旬', '下旬'];

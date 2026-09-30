@@ -3,11 +3,11 @@
   const U = SG.U, R = SG.R, H = SG.Hex, G = SG.G, T = SG.T;
   const RD = SG.Render = {};
   RD.cam = { x: 0, y: 0, zoom: 0.8 };
-  RD.hl = { move: null, attack: null, path: null, sel: null, hover: null };
+  RD.hl = { move: null, attack: null, path: null, sel: null, hover: null, flood: null };
   RD.worldW = () => H.CW * (H.W + 0.5);
   RD.worldH = () => H.RH * (H.H - 1) + 2 * H.R;
 
-  const TCOL = ['#2d5f8a', '#a3c46c', '#cdb67e', '#6f9a4a', '#a58d62', '#7d6a55', '#4b8cc8', '#a3c46c', '#a3c46c'];
+  const TCOL = ['#2d5f8a', '#a3c46c', '#cdb67e', '#6f9a4a', '#a58d62', '#7d6a55', '#4b8cc8', '#a3c46c', '#a3c46c', '#a3c46c'];
   const FAC_COL = { market: '#e0b44c', farm: '#9ccc65', barracks: '#e57373', smithy: '#90a4ae', stable: '#a1887f', workshop: '#ba68c8' };
 
   function shade(hex, k) {
@@ -205,6 +205,48 @@
         }
       }
     }
+    // 工事：洪水、壕沟/水渠、堤坝、陷坑
+    const ws = G.S.works;
+    if (ws) {
+      for (const k in ws.flood) {
+        const p = H.center(...H.cr(+k));
+        if (!vis(p.x, p.y)) continue;
+        ctx.fillStyle = 'rgba(70,150,220,0.62)'; H.polygon(ctx, p.x, p.y, H.R + 0.5); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1.2; ctx.beginPath();
+        const ph = Math.sin(now / 400 + +k) * 3;
+        ctx.moveTo(p.x - 9, p.y + ph); ctx.quadraticCurveTo(p.x - 4, p.y - 4 + ph, p.x, p.y + ph); ctx.quadraticCurveTo(p.x + 4, p.y + 4 + ph, p.x + 9, p.y + ph); ctx.stroke();
+      }
+      for (const k in ws.ditch) {
+        const d = ws.ditch[k], p = H.center(...H.cr(+k));
+        if (!vis(p.x, p.y)) continue;
+        ctx.fillStyle = d.water ? 'rgba(60,130,200,0.85)' : 'rgba(90,60,35,0.85)';
+        H.polygon(ctx, p.x, p.y, H.R - 5); ctx.fill();
+        ctx.strokeStyle = d.water ? 'rgba(200,230,255,0.7)' : 'rgba(40,25,10,0.9)'; ctx.lineWidth = 1.5;
+        for (let s = -6; s <= 6; s += 6) { ctx.beginPath(); ctx.moveTo(p.x - 8, p.y + s); ctx.lineTo(p.x + 8, p.y + s); ctx.stroke(); }
+      }
+      for (const k in ws.dam) {
+        const d = ws.dam[k], p = H.center(...H.cr(+k));
+        if (!vis(p.x, p.y)) continue;
+        ctx.fillStyle = '#8d6e4a'; ctx.strokeStyle = '#3e2a17'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.rect(p.x - 14, p.y - 5, 28, 10); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#111'; ctx.fillRect(p.x - 14, p.y - 13, 28, 5);
+        ctx.fillStyle = d.level >= 7 ? '#e57373' : '#4fc3f7'; ctx.fillRect(p.x - 14, p.y - 13, 28 * d.level / R.DAM_MAX, 5);
+        label(ctx, '堤' + d.level, p.x, p.y + 12, 10, '#b3e5fc');
+      }
+      for (const k in ws.trap) {
+        if (!SG.Works.trapVisible(+k)) continue;
+        const p = H.center(...H.cr(+k));
+        if (!vis(p.x, p.y)) continue;
+        ctx.strokeStyle = 'rgba(60,30,10,0.95)'; ctx.fillStyle = 'rgba(40,20,5,0.55)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, 10, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#d7ccc8';
+        for (let s = -6; s <= 6; s += 4) { ctx.beginPath(); ctx.moveTo(p.x + s, p.y + 4); ctx.lineTo(p.x + s + 1, p.y - 4); ctx.stroke(); }
+      }
+    }
+    if (RD.hl.flood) {
+      ctx.fillStyle = 'rgba(30,120,255,0.35)'; ctx.strokeStyle = 'rgba(120,200,255,0.9)'; ctx.lineWidth = 1.5;
+      for (const i of RD.hl.flood) { const p = H.center(...H.cr(i)); H.polygon(ctx, p.x, p.y, H.R - 2); ctx.fill(); ctx.stroke(); }
+    }
     // 火焰
     for (const f of G.S.fires) {
       const p = H.center(...H.cr(f.i)), fl = Math.sin(now / 90 + f.i) * 2;
@@ -224,6 +266,12 @@
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
         for (let k = -s; k < s; k += 6) { ctx.fillRect(p.x + k, p.y - s - 4, 3, 3); }
         ctx.fillStyle = '#3a2a1a'; ctx.fillRect(p.x - 4, p.y + s - 9, 8, 9);
+      } else if (city.kind === 'port') {
+        ctx.fillStyle = '#5d4037'; ctx.fillRect(p.x - 13, p.y + 3, 26, 5);
+        ctx.fillStyle = col; ctx.strokeStyle = '#1b140c'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(p.x - 12, p.y - 2); ctx.lineTo(p.x + 12, p.y - 2); ctx.lineTo(p.x + 8, p.y + 4); ctx.lineTo(p.x - 8, p.y + 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(p.x, p.y - 2); ctx.lineTo(p.x, p.y - 15); ctx.stroke();
+        ctx.fillStyle = '#f5f5f5'; ctx.beginPath(); ctx.moveTo(p.x + 1, p.y - 14); ctx.lineTo(p.x + 9, p.y - 5); ctx.lineTo(p.x + 1, p.y - 5); ctx.fill();
       } else {
         ctx.fillStyle = shade(col.length === 7 ? col : '#9a9a9a', 0.55); ctx.fillRect(p.x - 13, p.y - 9, 26, 18);
         ctx.fillStyle = col; ctx.fillRect(p.x - 11, p.y - 7, 22, 14);
@@ -245,7 +293,14 @@
       if (!vis(p.x, p.y)) continue;
       const col = G.facColor(u.faction), dim = G.isPlayer(u.faction) && (u.acted || u.status);
       ctx.globalAlpha = dim ? 0.6 : 1;
-      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 12, 13, 4, 0, 0, Math.PI * 2); ctx.fill();
+      if (SG.Map.isWater(H.idx(u.c, u.r))) {
+        // 船身
+        const big = u.ship === 'lou' ? 1.25 : u.ship === 'dou' ? 1.1 : 0.9;
+        ctx.fillStyle = u.ship === 'zou' ? '#8d6e63' : '#5d4037'; ctx.strokeStyle = '#2b1b10'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(p.x - 17 * big, p.y + 6); ctx.lineTo(p.x + 17 * big, p.y + 6); ctx.lineTo(p.x + 11 * big, p.y + 14); ctx.lineTo(p.x - 11 * big, p.y + 14); ctx.closePath(); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 12, 13, 4, 0, 0, Math.PI * 2); ctx.fill();
+      }
       ctx.fillStyle = col; ctx.strokeStyle = '#1b140c'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(p.x, p.y - 1, 13, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(p.x, p.y - 1, 10.5, 0, Math.PI * 2); ctx.stroke();
@@ -254,7 +309,7 @@
       ctx.fillStyle = u.troops > u.maxT * 0.5 ? '#66bb6a' : u.troops > u.maxT * 0.25 ? '#ffca28' : '#ef5350';
       ctx.fillRect(p.x - 14, p.y + 13, 28 * U.clamp(u.troops / 15000, 0.03, 1), 4);
       if (z >= 0.6) label(ctx, G.off(u.offs[0]).name, p.x, p.y + 23, 10, '#fff', 'normal');
-      if (u.status) label(ctx, u.status.kind === 'confuse' ? '乱' : '伪', p.x + 12, p.y - 13, 11, '#e1bee7');
+      if (u.status) label(ctx, { confuse: '乱', false: '伪', flood: '淹' }[u.status.kind] || '异', p.x + 12, p.y - 13, 11, '#e1bee7');
       ctx.globalAlpha = 1;
       if (RD.hl.sel && RD.hl.sel.unit === u.id) {
         ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y - 1, 17 + Math.sin(now / 200) * 1.5, 0, Math.PI * 2); ctx.stroke();
@@ -287,7 +342,7 @@
     for (const city of G.S.cities) {
       const p = H.center(city.c, city.r);
       ctx.fillStyle = G.facColor(city.faction); ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
-      const s = city.kind === 'city' ? 3 + city.size : 3;
+      const s = city.kind === 'city' ? 3 + city.size : city.kind === 'port' ? 2 : 3;
       ctx.fillRect(p.x * sx - s, p.y * sy - s, s * 2, s * 2); ctx.strokeRect(p.x * sx - s, p.y * sy - s, s * 2, s * 2);
     }
     for (const k in G.S.units) {

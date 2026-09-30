@@ -57,6 +57,11 @@
       <b>战法</b>：暴击时伤害提升，并可能触发武将单挑。螺旋突/突击可击退敌军，横扫/旋风波及多队，乱射/投石溅射，火矢纵火。<br>
       <b>计略</b>：火计（烧伤）、扰乱（混乱）、伪报（行动不能并损气力）、镇静（解除异常）。成功率取决于智力差，洞察/深谋者免疫。<br>
       <b>攻城</b>：兵力降至 0 即攻陷，城中武将或逃或被俘。耐久归零后守军损伤加倍。都市会在每旬结束时射击相邻敌军。<br>
+      <b>港口与水军</b>：沿江、沿海设有港口，可驻军、可攻占。建「造船厂」生产斗舰、楼船，出征时配备舰船；部队进入河川、水渠、洪水区即以舰船作战（依水军适性），并改用冲突/乱射/火船等水军战法。斗舰、楼船可航行近海。水上火攻会在相邻战船间蔓延，东南风起时威力倍增。<br>
+      <b>工事（特色）</b>：部队可在相邻格「开沟」——壕沟阻滞敌军、兵器无法通行，连通河流即灌满成为水渠，可把水引向敌城；「陷坑」隐蔽设伏，敌军踏入即受损停步；「筑堤」截流蓄水，水位逐旬上涨、雨季加倍（满水时有溃堤之险）；「决堤」放水，洪水沿河道与水渠泛滥，淹没低地部队、冲毁城墙——水淹七军、引水灌城；「填沟」可拆除壕沟。悬停堤坝可预览淹没范围。<br>
+      <b>官职与爵位</b>：君主按都市数晋位（太守→刺史→州牧→公→王→皇帝），决定可授予的最高官职并增加行动力。武将官职决定统兵上限与能力加成，需积累功绩。<br>
+      <b>历史事件</b>：迎奉天子、袁术称帝、千里走单骑、孙策遇刺、袁绍病逝、三顾茅庐、刘表病逝、东南风起、张松献图等按史实触发；另有蝗灾、疫病、丰收、山贼、商队、名士来访等随机事件。<br>
+      <b>托管</b>：「内政托管」由部下打理种田、征兵、生产、人事，主公专心出征；「全托管」连军事也交给 AI。单城亦可「委任」。<br>
       <b>界面</b>：拖动/方向键平移，滚轮缩放，E 结束回合，N 切换待命部队，Esc/右键 取消。</div>
       <div class="foot"><button class="primary" id="h-ok">明白</button></div>`, m => {
       m.querySelector('#h-ok').addEventListener('click', () => { if (back) back(); else Dlg.close(); });
@@ -72,8 +77,8 @@
       const sorted = list.slice().sort((a, b) => key < 5 ? b.s[key] - a.s[key] : key === 5 ? a.loyalty - b.loyalty : a.city - b.city);
       return `<h2>武将一览（${list.length}）</h2>
         <div class="opts">${['统率', '武力', '智力', '政治', '魅力', '忠诚', '所在'].map((n, k) => `<button data-k="${k}" class="${k === key ? 'sel' : ''}">${n}</button>`).join('')}</div>
-        <div class="scroll" style="margin-top:6px"><table class="olist">${UI.offHead('<th>适性</th><th>忠诚</th><th>所在</th><th>状态</th>')}
-        ${sorted.map(o => UI.offRow(o, `<td>${o.apt}</td><td>${o.loyalty}</td><td>${esc(G.city(o.city).name)}</td><td>${o.status === 'captive' ? '<span class="warn">被俘</span>' : o.unit != null ? '出征' : o.acted ? '已行动' : '待命'}</td>`)).join('')}
+        <div class="scroll" style="margin-top:6px"><table class="olist">${UI.offHead('<th>适性</th><th>官职</th><th>功绩</th><th>忠诚</th><th>所在</th><th>状态</th>')}
+        ${sorted.map(o => UI.offRow(o, `<td>${o.apt}</td><td>${G.rank(o) ? G.rank(o).name : G.isRuler(o) ? '君主' : '-'}</td><td>${o.merit || 0}</td><td>${o.loyalty}</td><td>${esc(G.city(o.city).name)}</td><td>${o.status === 'captive' ? '<span class="warn">被俘</span>' : o.unit != null ? '出征' : o.acted ? '已行动' : '待命'}</td>`)).join('')}
         </table></div><div class="foot"><button data-close>关闭</button></div>`;
     };
     const bind = m => m.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { key = +b.dataset.k; Dlg.open(render(), bind); }));
@@ -148,7 +153,7 @@
     const S = G.S;
     S.proposals = S.proposals || [];
     const p = S.proposals.shift();
-    if (!p) return;
+    if (!p) return Dlg.events();
     if (!G.fac(p.from).alive) return Dlg.proposals();
     const name = G.facName(p.from);
     Dlg.confirm('使者来访', `${esc(name)} 遣使前来，请求与我方${p.kind === 'alliance' ? '<b>缔结同盟</b>（一年）' : '<b>停战</b>（半年）'}。是否应允？`, () => {
@@ -158,6 +163,77 @@
       G.log(`与 ${name} ${p.kind === 'alliance' ? '结盟' : '停战'}`, 'l-good');
       UI.refresh(); Dlg.proposals();
     }, () => { G.addRel(S.player, p.from, -5); Dlg.proposals(); });
+  };
+
+  // ---------- 历史事件 ----------
+  Dlg.events = () => {
+    const q = G.S.eventQueue || (G.S.eventQueue = []);
+    const e = q.shift();
+    if (!e) return;
+    Dlg.open(`<h2>【${esc(e.title)}】</h2><div class="evt">${e.text}</div>
+      <div class="foot"><button class="primary" id="ev-ok">知道了</button></div>`, m => {
+      m.querySelector('#ev-ok').addEventListener('click', () => { Dlg.close(); Dlg.events(); });
+    });
+  };
+
+  // ---------- 托管 ----------
+  Dlg.autoMode = () => {
+    const cur = G.S.auto || 'manual';
+    Dlg.open(`<h2>托管设置</h2><p class="muted">托管在每旬结束时执行，会为出征保留约 30 行动力。无论何种模式，主公仍可随时亲自下达任何指令。</p>
+      <div style="display:flex;flex-direction:column;gap:6px;max-width:560px">
+      ${Object.entries(R.AUTO_MODES).map(([k, m]) => `<div class="faction-card ${k === cur ? 'cur' : ''}" data-m="${k}" style="border-left:6px solid ${k === cur ? 'var(--gold)' : 'var(--line)'}">
+        <div class="fn">${m.name}${k === cur ? '　<small class="good">（当前）</small>' : ''}</div><div class="muted">${m.desc}</div></div>`).join('')}
+      </div><p class="muted">单个都市也可在都市面板中「委任」，效果与内政托管相同但仅限该城。</p>
+      <div class="foot"><button data-close>关闭</button></div>`, m => {
+      m.querySelectorAll('[data-m]').forEach(c => c.addEventListener('click', () => {
+        G.S.auto = c.dataset.m;
+        Dlg.close();
+        UI.toast('已切换为「' + R.AUTO_MODES[G.S.auto].name + '」');
+        G.log('托管模式：' + R.AUTO_MODES[G.S.auto].name, 'l-dim');
+        UI.refresh();
+      }));
+    });
+  };
+
+  // ---------- 官职 ----------
+  Dlg.ranks = () => {
+    const pf = G.S.player, f = G.fac(pf), t = G.title(pf), RK = SG.Ranks;
+    const next = R.TITLES[(f.title || 0) + 1];
+    const n = G.realCitiesOf(pf).length;
+    const rows = R.RANKS.map(r => {
+      const hs = RK.holders(pf, r.id), locked = r.grade < t.maxGrade;
+      const bonus = r.bonus.map((v, k) => v ? '统武智政魅'[k] + '+' + v : '').filter(Boolean).join(' ');
+      return `<tr style="${locked ? 'opacity:.45' : ''}"><td>${r.name}${r.civ ? '<small class="muted">（文）</small>' : ''}</td><td>${R.GRADE_NAME[r.grade]}</td>
+        <td>${U.fmt(R.GRADE_CAP[r.grade])}</td><td>${bonus}${r.desc ? '<br><small class="muted">' + r.desc + '</small>' : ''}</td><td>${R.GRADE_MERIT[r.grade]}</td>
+        <td style="text-align:left">${hs.map(o => `${esc(o.name)}<button data-dis="${o.id}" title="罢免（忠诚 -10）" style="padding:0 4px;margin-left:2px">✕</button>`).join(' ') || '<span class="muted">空缺</span>'}${r.slots > 1 ? `<small class="muted">（${hs.length}/${r.slots}）</small>` : ''}</td>
+        <td>${!locked && hs.length < r.slots ? `<button data-app="${r.id}">任命</button>` : ''}</td></tr>`;
+    }).join('');
+    Dlg.open(`<h2>官职 · 爵位</h2>
+      <p>${esc(G.ruler(pf).name)}　爵位：<b class="skill">${t.name}</b>　可授予 <b>${R.GRADE_NAME[t.maxGrade]}</b> 及以下官职　每旬行动力 +${RK.apBonus(pf)}<br>
+      <span class="muted">${next ? `下一爵位「${next.name}」：需都市 ${next.need} 座（现有 ${n} 座）` : '已登峰造极'}。官职决定统兵上限与能力加成，需积累功绩（内政、作战、工事皆可获得）。任命可提升忠诚。</span></p>
+      <div class="scroll"><table class="olist"><tr><th>官职</th><th>品级</th><th>统兵</th><th>加成</th><th>需功绩</th><th>在任</th><th></th></tr>${rows}</table></div>
+      <div class="foot"><button id="rk-auto">自动任命</button><button data-close>关闭</button></div>`, m => {
+      m.querySelector('#rk-auto').addEventListener('click', () => {
+        const log = RK.autoAssign(pf, true);
+        UI.toast(log.length ? `任命 ${log.length} 人` : '没有可调整的官职');
+        if (log.length) G.log('官职任命：' + log.join('、'), 'l-good');
+        Dlg.ranks(); UI.refresh();
+      });
+      m.querySelectorAll('[data-dis]').forEach(b => b.addEventListener('click', () => {
+        const r = RK.dismiss(G.off(+b.dataset.dis)); UI.toast(r.msg); Dlg.ranks(); UI.refresh();
+      }));
+      m.querySelectorAll('[data-app]').forEach(b => b.addEventListener('click', () => {
+        const rid = b.dataset.app, r = R.RANK[rid];
+        const list = G.officersOf(pf).filter(o => !G.isRuler(o) && o.rank !== rid);
+        Dlg.pickOfficers({
+          title: `任命${r.name}（${R.GRADE_NAME[r.grade]}）`, list, sortKey: null,
+          extraHead: '<th>功绩</th><th>现职</th><th>可否</th>',
+          extra: o => { const e = RK.eligible(pf, o, rid); return `<td>${o.merit || 0}</td><td>${G.rank(o) ? G.rank(o).name : '-'}</td><td>${e ? `<span class="warn" title="${esc(e)}">×</span>` : '<span class="good">○</span>'}</td>`; },
+          note: `需功绩 ${R.GRADE_MERIT[r.grade]}。${r.civ ? '文官按智力、政治加成。' : '武官提高统兵上限及统率、武力。'}`,
+          onOk: ([id]) => { const res = RK.appoint(pf, G.off(id), rid); UI.toast(res.msg); if (res.ok) G.log(res.msg, 'l-good'); Dlg.ranks(); UI.refresh(); },
+        });
+      }));
+    });
   };
 
   // ---------- 系统 ----------
