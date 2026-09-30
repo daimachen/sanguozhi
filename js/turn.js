@@ -51,6 +51,7 @@
       }
     }
     C.cleanup(null);
+    SG.Forts.endRound();
     for (const k in S.units) SG.Units.upkeep(S.units[k]);
     C.cleanup(null);
   };
@@ -93,6 +94,7 @@
     TN.advanceDate();
     D.income();
     TN.officersUpkeep();
+    SG.Tech.endRound();
     if (S.xun === 0) { SG.Ranks.checkTitles(); SG.Events.check(); }
     for (const f of S.factions) {
       if (!f.alive) continue;
@@ -132,6 +134,7 @@
     if (mode === 'full') { SG.AI.runFaction(pf); return; }
     if (mode === 'domestic') {
       SG.AI.handleCaptives(pf);
+      SG.Tech.ai(pf);
       if (S.xun === 0) SG.Ranks.autoAssign(pf);
     }
     const cities = G.realCitiesOf(pf).filter(c => mode === 'domestic' || c.delegate);

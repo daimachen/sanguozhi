@@ -14,31 +14,22 @@
       <span id="tb-faction" class="tb-faction">—</span>
     </div>
     <div class="tb-stats" id="tb-stats"></div>
-    <div class="tb-right">
-      <button id="btn-officers" title="武将一览">武将</button>
-      <button id="btn-cities" title="都市一览">都市</button>
-      <button id="btn-factions" title="势力一览">势力</button>
-      <button id="btn-diplomacy" title="外交">外交</button>
-      <button id="btn-advisor" title="听取军师建言">军师</button>
-      <button id="btn-ranks" title="官职任命与君主爵位">官职</button>
-      <button id="btn-auto" title="内政托管 / 全托管设置">托管</button>
-      <button id="btn-system" title="存档 / 读档 / 设置">系统</button>
-      <button id="btn-endturn" class="primary" title="结束本旬（快捷键 E）">结束回合</button>
-    </div>
   </header>
   <main id="main">
     <div id="mapwrap">
       <canvas id="map"></canvas>
       <div id="tooltip" class="hidden"></div>
-      <div id="log"></div>
+      <div id="ticker"></div>
+      <div id="minimap-wrap"><canvas id="minimap" width="300" height="195"></canvas></div>
+      <div id="log" class="hidden"></div>
+      <div id="infocard"></div>
+      <div id="unitmenu" class="hidden"></div>
+      <div id="submenu" class="hidden"></div>
+      <nav id="cmdbar"></nav>
       <div id="toast-area"></div>
       <div id="cutin-area"></div>
       <div id="advisor" class="hidden"></div>
     </div>
-    <aside id="panel">
-      <div id="panel-body"></div>
-      <canvas id="minimap" width="300" height="195"></canvas>
-    </aside>
   </main>
 </div>
 <div id="modal-bg" class="hidden"><div id="modal"></div></div>
@@ -52,20 +43,26 @@
 <script src="js/map.js"></script>
 <script src="js/state.js"></script>
 <script src="js/ranks.js"></script>
+<script src="js/tech.js"></script>
 <script src="js/combat.js"></script>
 <script src="js/units.js"></script>
 <script src="js/works.js"></script>
+<script src="js/forts.js"></script>
 <script src="js/domestic.js"></script>
 <script src="js/diplomacy.js"></script>
 <script src="js/events.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/turn.js"></script>
 <script src="js/render.js"></script>
+<script src="js/render_terrain.js"></script>
+<script src="js/render_sprites.js"></script>
 <script src="js/cutin.js"></script>
+<script src="js/duel_debate.js"></script>
 <script src="js/advisor.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/ui_dialogs.js"></script>
 <script src="js/ui_dialogs2.js"></script>
+<script src="js/ui_layout.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

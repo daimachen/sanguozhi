@@ -30,10 +30,11 @@
       mult = R.APT_MULT[apt] * (G.hasSkill(offs, '水将') ? 1.3 : 1);
       atk = sh.atk; def = sh.def;
     } else { atk = ty.atk; def = ty.def; }
+    const tm = SG.Tech ? SG.Tech.unitMult(u) : { atk: 1, def: 1 };
     return {
-      offs, lea, war, int, apt, naval,
-      atk: atk * mult * (0.5 + war / 200),
-      def: def * mult * (0.5 + lea / 200),
+      offs, lea, war, int, apt, naval, fid: u.faction, type: u.type,
+      atk: atk * mult * (0.5 + war / 200) * tm.atk,
+      def: def * mult * (0.5 + lea / 200) * tm.def,
     };
   };
   C.cityStats = city => {
@@ -63,6 +64,7 @@
     const ty = R.TYPES[u.type];
     if (ty.noAttack) return [0, 0];
     if (C.inWater(u)) return u.type === 'bow' || u.ship === 'lou' ? [1, 2] : [1, 1];
+    if (u.type === 'bow' && SG.Tech && SG.Tech.has(u.faction, 'bw2')) return [1, 3];
     return ty.range;
   };
   C.tacticsOf = u => (R.TYPES[u.type].noAttack ? [] : C.inWater(u) ? R.TACTICS.navy : R.TACTICS[u.type]);
@@ -78,6 +80,7 @@
     for (const city of G.S.cities) {
       if (C.canHitCity(u, city) && C.inRange(u, city.c, city.r, rng)) out.push({ city, c: city.c, r: city.r });
     }
+    if (SG.Forts) out.push(...SG.Forts.hostileTargets(u, rng));
     return out;
   };
 
@@ -89,6 +92,7 @@
       const cm = (R.COUNTER[att.type] || {})[def.type];
       if (cm) d *= cm;
       if (G.hasSkill(defStats.offs, '铁壁')) d *= 0.8;
+      if (SG.Forts) d /= SG.Forts.defBonus(def);
     } else {
       d *= 1.6;
       if (def.dur <= 0) d *= 2;
@@ -101,7 +105,7 @@
 
   // 战法成功率 / 暴击率
   C.tacticRate = (st, tgtWar) => {
-    let p = R.APT_RATE[st.apt] + (st.war - tgtWar) / 250;
+    let p = R.APT_RATE[st.apt] + (st.war - tgtWar) / 250 + (SG.Tech ? SG.Tech.rateBonus(st.fid, st.type) : 0);
     if (G.hasSkill(st.offs, '神将')) p += 0.15;
     if (G.hasSkill(st.offs, '奸雄')) p += 0.1;
     return U.clamp(p, 0.15, 0.98);
@@ -112,7 +116,7 @@
     if ((u.type === 'spear' || u.type === 'halberd') && has('斗神')) return 1;
     if ((u.type === 'spear' && has('枪将')) || (u.type === 'halberd' && has('戟将')) || (u.type === 'bow' && has('弓将')) ||
       (u.type === 'horse' && (has('骑将') || has('骑神')))) return 1;
-    let p = 0.08 + st.war / 1000;
+    let p = 0.08 + st.war / 1000 + (SG.Tech ? SG.Tech.critBonus(u.faction, u.type) : 0);
     if (has('霸王')) p += 0.5;
     if (has('勇将')) p += 0.25;
     return U.clamp(p, 0, 1);
@@ -133,6 +137,7 @@
   // 预估（UI、AI 用）
   C.preview = (u, tgt, tactic) => {
     const st = C.stats(u);
+    if (tgt.fort) return { rate: tactic ? C.tacticRate(st, 50) : 1, dmg: SG.Forts.damageOf(u, st, tactic ? 1 + (tactic.mult - 1) * 0.5 : 1), fort: true };
     if (tgt.unit) {
       const ts = C.stats(tgt.unit);
       const rate = tactic ? C.tacticRate(st, ts.war) : 1;
@@ -148,6 +153,7 @@
   C.durDamage = (u, st, mult) => {
     let d = Math.sqrt(Math.max(u.troops, 1)) * R.TYPES[u.type].siege * 1.5 * (0.6 + st.war / 250) * mult;
     if (G.hasSkill(st.offs, '攻城')) d *= 1.5;
+    if (u.type === 'ram' && SG.Tech && SG.Tech.has(u.faction, 'sg2')) d *= 1.3;
     return d;
   };
 
@@ -178,17 +184,17 @@
     if (u.acted) return { ok: false, msg: '该部队本回合已行动' };
     if (!C.inRange(u, tgt.c, tgt.r, rng)) return { ok: false, msg: '目标不在射程内' };
     if (tactic && u.energy < tactic.en) return { ok: false, msg: '气力不足' };
-    if (tactic && tactic.cityOnly && !tgt.city) return { ok: false, msg: '该战法只能对都市使用' };
+    if (tactic && tactic.cityOnly && !tgt.city && !tgt.fort) return { ok: false, msg: '该战法只能对都市、建筑使用' };
     if (u.type === 'ram' && tgt.unit && !C.inWater(u)) return { ok: false, msg: '冲车无法攻击部队' };
     const st = C.stats(u), name = u.name;
-    const tName = tgt.unit ? tgt.unit.name : tgt.city.name;
+    const tName = tgt.unit ? tgt.unit.name : tgt.city ? tgt.city.name : G.facName(tgt.fort.f) + '的' + SG.Forts.DEFS[tgt.fort.type].name;
     u.acted = true; u.mp = 0;
     let msg = '';
-    const pl = G.isPlayer(u.faction) || (tgt.unit ? G.isPlayer(tgt.unit.faction) : G.isPlayer(tgt.city.faction));
+    const pl = G.isPlayer(u.faction) || (tgt.unit ? G.isPlayer(tgt.unit.faction) : tgt.city ? G.isPlayer(tgt.city.faction) : G.isPlayer(tgt.fort.f));
     const cls = pl ? 'l-war' : 'l-dim';
     if (tactic) {
       u.energy -= tactic.en;
-      const tWar = tgt.unit ? C.stats(tgt.unit).war : C.cityStats(tgt.city).war;
+      const tWar = tgt.unit ? C.stats(tgt.unit).war : tgt.city ? C.cityStats(tgt.city).war : 50;
       if (!U.chance(C.tacticRate(st, tWar))) {
         SG.fx(u.c, u.r, tactic.name + ' 失败', '#bbb');
         G.log(`${name} 对 ${tName} 发动「${tactic.name}」失败`, cls);
@@ -200,6 +206,12 @@
     if (tactic) SG.fx(u.c, u.r, tactic.name + (crit ? '·暴击!' : ''), crit ? '#ffd54f' : '#fff');
     if (tactic && SG.Cutin) SG.Cutin.tactic(u, tactic, crit, tgt);
 
+    if (tgt.fort) {
+      const d = SG.Forts.hit(u, st, tgt, 1 + (mult - 1) * 0.5);
+      msg = `${name} ${tactic ? '以「' + tactic.name + '」' : ''}攻击 ${tName}，耐久 -${d}`;
+      G.log(msg, cls);
+      return { ok: true, msg };
+    }
     if (tgt.city) {
       const d = hitCity(u, st, tgt.city, mult);
       msg = `${name} ${tactic ? '以「' + tactic.name + '」' : ''}攻打 ${tgt.city.name}，歼敌 ${d}${crit ? '（暴击）' : ''}`;
@@ -234,7 +246,7 @@
       if (o && G.hostile(u.faction, o.faction)) extra.push([o, 0.8]);
     }
     for (const [o, k] of extra) hitUnit(u, st, o, mult * k);
-    if (tactic && tactic.fire) C.setFire(H.idx(t.c, t.r), 2, 1);
+    if (tactic && tactic.fire) C.setFire(H.idx(t.c, t.r), 2, SG.Tech ? SG.Tech.fireK(u.faction, SG.Map.isWater(H.idx(t.c, t.r))) : 1);
     // 击退
     const oldC = t.c, oldR = t.r;
     if (tactic && tactic.push && t.troops > 0) {
@@ -274,6 +286,7 @@
 
   C.canStand = (c, r) => {
     if (!H.inside(c, r)) return false;
+    if (SG.Forts && SG.Forts.at(H.idx(c, r))) return false;
     const i = H.idx(c, r), t = SG.map.t[i];
     if (t === SG.T.SEA || t === SG.T.PEAK || t === SG.T.CITY || t === SG.T.GATE) return false;
     return !G.unitAt(c, r);
@@ -319,7 +332,7 @@
       return { ok: true, msg: '失败' };
     }
     if (sch.id === 'fire') {
-      C.setFire(H.idx(c, r), 2, G.hasSkill(st.offs, '火神') ? 2 : 1);
+      C.setFire(H.idx(c, r), 2, (G.hasSkill(st.offs, '火神') ? 2 : 1) * (SG.Tech ? SG.Tech.fireK(u.faction, SG.Map.isWater(H.idx(c, r))) : 1));
       SG.fx(c, r, '火计!', '#ff7043');
     } else {
       tu.status = { kind: sch.id, turns: (sch.id === 'confuse' ? U.randInt(1, 2) : 1) + (G.isPlayer(tu.faction) && !G.isPlayer(u.faction) ? 1 : 0) };
@@ -398,6 +411,7 @@
     city.order = Math.min(city.order, 50);
     city.dur = Math.max(city.dur, Math.round(city.maxDur * 0.2));
     city.delegate = false;
+    if (SG.Tech && SG.Tech.has(nf, 'dm3')) SG.Tech.wall(city);
     C.unitIntoCity(u, city, true);
     if (old >= 0) {
       const f = G.fac(old);
@@ -484,6 +498,7 @@
   };
   C.startDuel = (u, t) => {
     const a = U.maxBy(C.offs(u), G.war), b = U.maxBy(C.offs(t), G.war);
+    if (SG.Duel && SG.Duel.request(u, t, a, b)) return;
     const res = C.duelSim(a, b);
     G.log(`单挑！${a.name} VS ${b.name}：${res.winner ? res.winner.name + ' 获胜' : '平手'}`, 'l-war');
     if (res.winner) {

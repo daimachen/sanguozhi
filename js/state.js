@@ -33,7 +33,11 @@
   G.grade = o => { const r = G.rank(o); return r ? r.grade : 0; };
   // 含官职加成的能力值（k: 0统 1武 2智 3政 4魅）
   G.st = (o, k) => { const r = G.rank(o); return o.s[k] + (r ? r.bonus[k] : 0); };
-  G.merit = (o, v) => { if (o && o.status === 'active' && o.faction >= 0) o.merit = (o.merit || 0) + Math.round(v); };
+  G.merit = (o, v) => {
+    if (!o || o.status !== 'active' || o.faction < 0) return;
+    o.merit = (o.merit || 0) + Math.round(v);
+    if (SG.Tech) SG.Tech.addTP(o.faction, v * 0.05);
+  };
   G.title = fid => R.TITLES[G.S.factions[fid].title || 0];
   G.titleName = fid => G.title(fid).name;
   G.nearWater = cid => {
@@ -89,7 +93,7 @@
       ver: 2, scenario: sc.name, year: sc.year, month: sc.month, xun: 0, turn: 1,
       player: -1, factions: [], cities: [], officers: [], units: {}, nextUnit: 1,
       fires: [], log: [], rel: {}, ally: {}, truce: {}, proposals: [], over: false,
-      works: { ditch: {}, trap: {}, dam: {}, flood: {} }, eventsDone: {}, eventQueue: [], auto: 'manual', eastWind: 0,
+      works: { ditch: {}, trap: {}, dam: {}, flood: {} }, forts: {}, eventsDone: {}, eventQueue: [], auto: 'manual', eastWind: 0,
     };
     const raw = G.parseOfficers(), offByName = {};
     raw.forEach(o => { offByName[o.name] = o; });

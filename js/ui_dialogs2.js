@@ -43,7 +43,7 @@
         Dlg.close();
         SG.Main.start();
         Dlg.msg(`${c.dataset.r} 之志`, `${esc(SG.DATA.scenario.intro)}<br><br>目标：<b>统一全部 42 座都市</b>。<br>
-          提示：点击己方都市执行内政与出征；选中部队后点击蓝色格移动，再选择攻击 / 战法 / 计略。每旬结束后，各势力依次行动。`);
+          提示：点击都市后用右下角指令栏（都市 / 军事 / 人事……）下令；点击部队会在旁边弹出指令菜单，选「移动」再点蓝色格，选「战法 / 计略 / 工事 / 建设」再点红色目标。`);
       }));
     });
   };
@@ -63,7 +63,10 @@
       <b>官职与爵位</b>：君主按都市数晋位（太守→刺史→州牧→公→王→皇帝），决定可授予的最高官职并增加行动力。武将官职决定统兵上限与能力加成，需积累功绩。<br>
       <b>历史事件</b>：迎奉天子、袁术称帝、千里走单骑、孙策遇刺、袁绍病逝、三顾茅庐、刘表病逝、东南风起、张松献图等按史实触发；另有蝗灾、疫病、丰收、山贼、商队、名士来访等随机事件。<br>
       <b>托管</b>：「内政托管」由部下打理种田、征兵、生产、人事，主公专心出征；「全托管」连军事也交给 AI。单城亦可「委任」。<br>
-      <b>界面</b>：拖动/方向键平移，滚轮缩放，E 结束回合，N 切换待命部队，Esc/右键 取消。</div>
+      <b>技巧</b>：作战与内政积累技巧点，在「技巧」中研究枪、戟、弩、骑、兵器、水军、内政、军制八大分支，各三阶。<br>
+      <b>野战建筑</b>：部队可在相邻格建设阵、砦（加防、回复）、箭楼（自动射击）、石兵八阵（迷乱敌军），建筑可被攻击摧毁。<br>
+      <b>单挑与舌战</b>：暴击触发单挑时可亲自操作（攻击、全力一击、防御、必杀、撤退）；登用与外交可选择「舌战」，以道理、利害、感情三类论点相克取胜。<br>
+      <b>界面</b>：右下指令栏下令；部队旁弹出指令菜单；左下信息卡、右上小地图。拖动/方向键平移，滚轮缩放，E 结束回合，N 切换待命部队，Esc/右键 返回。</div>
       <div class="foot"><button class="primary" id="h-ok">明白</button></div>`, m => {
       m.querySelector('#h-ok').addEventListener('click', () => { if (back) back(); else Dlg.close(); });
     });
@@ -140,11 +143,22 @@
           extra: o => `<td>${esc(G.city(o.city).name)}</td><td>${a === 'goodwill' ? '-' : U.pct(Dp.rates(pf, o, tgt)[a])}</td>`,
           onOk: ([id]) => {
             const o = G.off(id);
-            const res = a === 'goodwill' ? Dp.goodwill(pf, o, tgt, gold) : Dp[a](pf, o, tgt);
-            if (!res.ok) { UI.toast(res.msg); return; }
-            G.log(res.msg, 'l-war');
-            Dlg.msg('外交结果', esc(res.msg));
-            UI.refresh();
+            const go = force => {
+              const res = a === 'goodwill' ? Dp.goodwill(pf, o, tgt, gold) : Dp[a](pf, o, tgt, force);
+              if (!res.ok) { UI.toast(res.msg); return; }
+              G.log(res.msg, 'l-war');
+              Dlg.msg('外交结果', esc(res.msg));
+              UI.refresh();
+            };
+            const rate = a === 'goodwill' ? 1 : Dp.rates(pf, o, tgt)[a];
+            const foe = U.maxBy(G.officersOf(tgt), x => x.s[2]);
+            if (a === 'goodwill' || rate <= 0 || !foe) { go(false); return; }
+            if (G.fac(pf).ap < R.AP.diplomacy) { UI.toast('行动力不足'); return; }
+            Dlg.choice('外交交涉', `${esc(o.name)} 出使 ${esc(G.facName(tgt))}，对方由 ${esc(foe.name)}（智${foe.s[2]}）应对。<br>直接交涉成功率 ${U.pct(rate)}；或当庭「舌战」——辩胜则必定成功。`, [
+              ['取消', null],
+              ['舌战', () => SG.Debate.start(o, foe, b.textContent + '·' + G.facName(tgt), win => { if (win) go(true); else { G.fac(pf).ap -= R.AP.diplomacy; o.acted = true; G.addRel(pf, tgt, -3); Dlg.msg('外交结果', '舌战失利，交涉未果。'); UI.refresh(); } })],
+              [`直接交涉（${U.pct(rate)}）`, () => go(false), true],
+            ]);
           },
         });
       }));
@@ -238,6 +252,33 @@
     });
   };
 
+  // ---------- 技巧研究 ----------
+  Dlg.tech = () => {
+    const pf = G.S.player, f = G.fac(pf), TC = SG.Tech;
+    const cur = f.research ? TC.all[f.research.id] : null;
+    const cell = t => {
+      const done = TC.has(pf, t.id), busy = f.research && f.research.id === t.id, why = TC.reason(pf, t.id), c = TC.TIER[t.tier];
+      const cls = done ? 'tc done' : busy ? 'tc busy' : why ? 'tc lock' : 'tc ok';
+      return `<div class="${cls}" data-t="${t.id}" title="${esc(t.desc)}${!done && !busy && why ? '\n（' + esc(why) + '）' : ''}">
+        <b>${t.name}</b><small>${t.desc}</small>
+        <span>${done ? '已研究' : busy ? `研究中·余 ${f.research.left} 旬` : `技巧点 ${c.tp} · 金 ${c.gold} · ${c.turns} 旬`}</span></div>`;
+    };
+    Dlg.open(`<h2>技巧研究</h2>
+      <p>技巧点 <b class="skill">${f.tp || 0}</b>　行动力 ${f.ap}（每次研究消耗 ${TC.AP}）　${cur ? `正在研究：<b>${cur.name}</b>（余 ${f.research.left} 旬）` : '<span class="muted">当前没有进行中的研究</span>'}</p>
+      <p class="muted">技巧点来自作战、内政等功绩及每月各城的积累。每个分支须按顺序研究，同一时间只能研究一项。</p>
+      <div class="tech-grid">${TC.BRANCHES.map(b => `<div class="tb"><div class="tb-h">${b.name}</div>${b.list.map(cell).join('')}</div>`).join('')}</div>
+      <div class="foot"><button data-close>关闭</button></div>`, m => {
+      m.querySelectorAll('.tc.ok').forEach(el => el.addEventListener('click', () => {
+        const t = TC.all[el.dataset.t], c = TC.TIER[t.tier];
+        Dlg.confirm('技巧研究', `研究「${t.name}」？<br>${t.desc}<br><span class="muted">消耗技巧点 ${c.tp}、金 ${c.gold}、行动力 ${TC.AP}，需 ${c.turns} 旬。</span>`, () => {
+          const r = TC.start(pf, t.id);
+          UI.toast(r.msg); if (r.ok) G.log(r.msg, 'l-good');
+          UI.refresh(); Dlg.tech();
+        }, () => Dlg.tech(), '开始研究', '取消');
+      }));
+    });
+  };
+
   // ---------- 系统 ----------
   Dlg.system = fromTitle => {
     const slot = k => {
@@ -251,6 +292,7 @@
         <option value="all" ${pf.cutin === 'all' ? 'selected' : ''}>战法、计略时都显示</option>
         <option value="crit" ${pf.cutin === 'crit' ? 'selected' : ''}>仅会心一击与决堤</option>
         <option value="off" ${pf.cutin === 'off' ? 'selected' : ''}>关闭</option></select></div>
+      <div class="row"><label>地图网格</label><label style="min-width:0;color:var(--text)"><input type="checkbox" id="p-grid" ${pf.grid ? 'checked' : ''}> 始终显示六角网格（默认仅在移动部队时显示）</label></div>
       <div class="row"><label>军师建言</label><label style="min-width:0;color:var(--text)"><input type="checkbox" id="p-adv" ${pf.advisor ? 'checked' : ''}> 每回合开始自动献策</label></div>`;
     Dlg.open(`<h2>${fromTitle ? '读取存档' : '系统'}</h2><table class="olist">${['auto', 1, 2, 3].map(slot).join('')}</table>${prefs}
       <div class="foot">${fromTitle ? '<button id="s-back">返回</button>' : '<a class="btn" href="editor.html" target="_blank" title="在新标签页打开，保存后游戏内自动更新">头像编辑</a><button id="s-help">说明</button><button id="s-title">返回标题</button><button data-close>关闭</button>'}</div>`, m => {
@@ -262,6 +304,7 @@
       }));
       const bk = m.querySelector('#s-back'); if (bk) bk.addEventListener('click', Dlg.title);
       const pc = m.querySelector('#p-cutin'); if (pc) pc.addEventListener('change', e => { SG.Cutin.prefs.cutin = e.target.value; SG.Cutin.savePrefs(); });
+      const pg = m.querySelector('#p-grid'); if (pg) pg.addEventListener('change', e => { SG.Cutin.prefs.grid = e.target.checked; SG.Cutin.savePrefs(); });
       const pa = m.querySelector('#p-adv'); if (pa) pa.addEventListener('change', e => { SG.Cutin.prefs.advisor = e.target.checked; SG.Cutin.savePrefs(); });
       const hp = m.querySelector('#s-help'); if (hp) hp.addEventListener('click', () => Dlg.help());
       const tt = m.querySelector('#s-title'); if (tt) tt.addEventListener('click', () => Dlg.confirm('返回标题', '未保存的进度将会丢失（自动存档保留至上一回合）。', Dlg.title, Dlg.system, '确定', '取消'));

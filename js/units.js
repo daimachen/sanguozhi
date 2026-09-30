@@ -8,7 +8,7 @@
     if (G.isRuler(o)) return 15000;
     return R.GRADE_CAP[G.grade(o)] + (o.s[0] >= 85 ? 1000 : 0);
   };
-  Un.mpOf = u => R.TYPES[u.type].mp + (G.hasSkill(C.offs(u), '强行') ? 4 : 0);
+  Un.mpOf = u => R.TYPES[u.type].mp + (G.hasSkill(C.offs(u), '强行') ? 4 : 0) + (SG.Tech ? SG.Tech.mpBonus(u) : 0);
 
   // 城外可出阵的格子
   Un.exitHexes = city => H.neighbors(city.c, city.r).filter(([c, r]) => C.canStand(c, r));
@@ -85,6 +85,7 @@
         if (nd > u.mp) continue;
         const o = occ.get(ni);
         if (o && !G.friendly(u.faction, o.faction)) continue;
+        if (SG.Forts && SG.Forts.at(ni)) continue;
         const cid = SG.map.city[ni];
         let stop = !o;
         if (cid >= 0) {
@@ -140,6 +141,7 @@
     const [gc, gr] = H.cr(goal);
     const costFn = (ni) => {
       const k = SG.Map.moveCost(ni, u.type, u.ship);
+      if (SG.Forts && SG.Forts.at(ni) && ni !== goal) return Infinity;
       const cid = SG.map.city[ni];
       if (cid >= 0 && ni !== goal) {
         const city = G.city(cid);
@@ -171,7 +173,7 @@
   // 回合结束时部队结算
   Un.upkeep = u => {
     const offs = C.offs(u);
-    const need = Math.ceil(u.troops / 20 * (G.hasSkill(offs, '屯田') ? 0.5 : 1));
+    const need = Math.ceil(u.troops / 20 * (G.hasSkill(offs, '屯田') ? 0.5 : 1) * (SG.Tech && SG.Tech.has(u.faction, 'ar1') ? 0.75 : 1));
     u.food -= need;
     if (u.food < 0) {
       u.food = 0;

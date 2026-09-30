@@ -175,6 +175,7 @@
         let s = p.rate * p.dmg;
         if (t.city) s *= (t.city.id === u.target ? 1.5 : 1.1) + (p.dur ? p.dur / 800 : 0);
         if (t.unit && p.dmg >= t.unit.troops) s *= 1.6;
+        if (t.fort) s *= p.dmg >= t.fort.hp ? 1.2 : 0.6;
         if (tac) s -= tac.en * 6;
         if (!best || s > best.s) best = { kind: 'attack', t, tac, s };
       }
@@ -254,7 +255,7 @@
       act = AI.bestAction(u);
     }
     if (act) AI.doAction(u, act);
-    else if (u.guard) SG.Works.aiTrap(u);
+    else if (u.guard && !SG.Forts.aiConsider(u)) SG.Works.aiTrap(u);
   };
 
   // ---------- 俘虏、挖角、外交 ----------
@@ -298,6 +299,7 @@
     if (!f.alive) return;
     AI.handleCaptives(fid);
     if (G.S.xun === 0 || G.S.turn <= 1) SG.Ranks.autoAssign(fid);
+    SG.Tech.ai(fid);
     const cities = U.shuffle(G.realCitiesOf(fid));
     // 前线优先
     cities.sort((a, b) => (AI.isFront(b) ? 1 : 0) - (AI.isFront(a) ? 1 : 0));

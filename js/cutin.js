@@ -5,7 +5,7 @@
   const esc = U.esc;
 
   // ---------- 偏好（本机） ----------
-  CI.prefs = { cutin: 'all', advisor: true };
+  CI.prefs = { cutin: 'all', advisor: true, grid: false };
   try { Object.assign(CI.prefs, JSON.parse(localStorage.getItem('sgz11_prefs') || '{}')); } catch (e) { /* 忽略 */ }
   CI.savePrefs = () => { try { localStorage.setItem('sgz11_prefs', JSON.stringify(CI.prefs)); } catch (e) { /* 忽略 */ } };
 

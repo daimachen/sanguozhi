@@ -23,6 +23,12 @@
       m.querySelector('#no').addEventListener('click', () => { Dlg.close(); no && no(); });
     });
   };
+  // 多选项提示：buttons = [[文字, 回调, 是否主按钮]]
+  Dlg.choice = (title, text, buttons) => {
+    Dlg.open(`<h2>${esc(title)}</h2><p>${text}</p><div class="foot">${buttons.map(([t, , p], k) => `<button data-k="${k}" class="${p ? 'primary' : ''}">${esc(t)}</button>`).join('')}</div>`, m => {
+      m.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { Dlg.close(); const f = buttons[+b.dataset.k][1]; if (f) f(); }));
+    });
+  };
   const done = (res, city, oid) => {
     if (!res.ok) { UI.toast(res.msg); return false; }
     if (res.msg) {
@@ -248,10 +254,19 @@
           title: `登用 ${t.name} · 选择使者`, list: idle(city), sortKey: 4,
           extraHead: '<th>成功率</th>', extra: o => `<td>${U.pct(D.employRate(o, t))}</td>`,
           onOk: ([oid]) => {
-            const res = D.employ(city, G.off(oid), t);
-            if (!res.ok) { UI.toast(res.msg); return; }
-            Dlg.msg(res.success ? '登用成功' : '登用失败', esc(res.msg));
-            UI.refresh();
+            const o = G.off(oid), rate = D.employRate(o, t);
+            const go = force => {
+              const res = D.employ(city, o, t, force);
+              if (!res.ok) { UI.toast(res.msg); return; }
+              Dlg.msg(res.success ? '登用成功' : '登用失败', esc(res.msg));
+              UI.refresh();
+            };
+            if (rate <= 0) { go(false); return; }
+            Dlg.choice(`招揽 ${t.name}`, `${esc(o.name)} 前去招揽 ${esc(t.name)}。<br>直接招揽成功率 ${U.pct(rate)}；也可与之「舌战」——辩胜则必定应允，辩败则失败。`, [
+              ['取消', null],
+              ['舌战说服', () => SG.Debate.start(o, t, `招揽${t.name}`, win => go(win ? true : 'lose'))],
+              [`直接招揽（${U.pct(rate)}）`, () => go(false), true],
+            ]);
           },
         });
       },

@@ -25,7 +25,8 @@
   };
   D.recruitAmount = (city, o) => {
     const n = G.facilityCount(city, 'barracks');
-    return Math.round((700 + G.st(o, 4) * 16) * (0.6 + 0.4 * n) * (hasSk(o, '名声') ? 1.5 : 1) / 10) * 10;
+    const tk = SG.Tech && SG.Tech.has(city.faction, 'dm1') ? 1.2 : 1;
+    return Math.round((700 + G.st(o, 4) * 16) * (0.6 + 0.4 * n) * (hasSk(o, '名声') ? 1.5 : 1) * tk / 10) * 10;
   };
   D.recruitCost = amt => Math.round(amt * 0.3);
   D.troopCap = city => R.CITY_DEFAULT[city.kind === 'city' ? city.size : city.kind].maxTroops;
@@ -33,10 +34,12 @@
   D.patrolAmount = o => Math.round((5 + G.st(o, 4) / 10) * (hasSk(o, '仁政') ? 2 : 1));
   D.produceAmount = (city, o, wk) => {
     const W = R.WEAPONS[wk], n = G.facilityCount(city, W.fac);
-    if (W.ship) return 1;
-    if (W.siege) return (hasSk(o, '发明') ? 2 : 1);
+    const th = id => SG.Tech && SG.Tech.has(city.faction, id);
+    if (W.ship) return 1 + (th('nv2') ? 1 : 0);
+    if (W.siege) return (hasSk(o, '发明') ? 2 : 1) * (th('sg3') ? 2 : 1);
     let a = (900 + G.st(o, 3) * 18) * (0.6 + 0.4 * n) * (hasSk(o, '能吏') ? 1.3 : 1);
     if (wk === 'horse' && hasSk(o, '繁殖')) a *= 2;
+    if (wk === 'horse' && th('hs2')) a *= 1.5;
     return Math.round(a / 10) * 10;
   };
   D.produceCost = (wk, amt) => R.WEAPONS[wk].siege ? R.WEAPONS[wk].cost * amt : Math.round(amt * 0.15);
@@ -148,13 +151,13 @@
     if (hasSk(o, '眼力')) p += 0.2;
     return U.clamp(p, 0, 0.95);
   };
-  D.employ = (city, o, t) => {
+  D.employ = (city, o, t, force) => {
     const e = check(city, o, R.AP.employ); if (e) return fail(e);
     if (t.unit != null) return fail(`${t.name} 正在出征，无法招揽`);
     payAP(city.faction, R.AP.employ);
     o.acted = true; G.merit(o, 10);
     const p = D.employRate(o, t);
-    if (!U.chance(p)) {
+    if (force === 'lose' || (!force && !U.chance(p))) {
       if (t.status === 'active') t.loyalty = Math.min(100, t.loyalty + 2);
       return { ok: true, success: false, msg: `${t.name} 拒绝了 ${o.name} 的招揽` };
     }
@@ -227,6 +230,7 @@
     let g = 150 + G.facilityCount(city, 'market') * 150;
     g *= 0.5 + 0.5 * city.order / 100;
     if (G.officersIn(city.id).some(o => o.skill === '富豪')) g *= 1.3;
+    if (SG.Tech && SG.Tech.has(city.faction, 'dm2')) g *= 1.15;
     return Math.round(g);
   };
   D.foodIncome = city => {
@@ -234,6 +238,7 @@
     let f = 1500 + G.facilityCount(city, 'farm') * 1300;
     f *= 0.5 + 0.5 * city.order / 100;
     if (G.officersIn(city.id).some(o => o.skill === '米道')) f *= 1.3;
+    if (SG.Tech && SG.Tech.has(city.faction, 'dm1')) f *= 1.15;
     return Math.round(f);
   };
   D.upkeep = city => Math.ceil(city.troops / 60);

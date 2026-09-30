@@ -42,10 +42,10 @@
     return { ok: true, msg: `${o.name} 出使 ${G.facName(tgt)}，友好度 +${inc}（现为 ${G.rel(fid, tgt)}）` };
   };
 
-  Dp.alliance = (fid, o, tgt) => {
+  Dp.alliance = (fid, o, tgt, force) => {
     const e = check(fid, o, tgt); if (e) return { ok: false, msg: e };
     spend(fid, o);
-    if (U.chance(Dp.rates(fid, o, tgt).alliance)) {
+    if (force || U.chance(Dp.rates(fid, o, tgt).alliance)) {
       G.S.ally[G.relKey(fid, tgt)] = G.S.turn + 36;
       G.addRel(fid, tgt, 10);
       G.log(`${G.facName(fid)} 与 ${G.facName(tgt)} 缔结同盟（一年）`, 'l-good');
@@ -55,10 +55,10 @@
     return { ok: true, msg: `${G.facName(tgt)} 拒绝了同盟` };
   };
 
-  Dp.truce = (fid, o, tgt) => {
+  Dp.truce = (fid, o, tgt, force) => {
     const e = check(fid, o, tgt); if (e) return { ok: false, msg: e };
     spend(fid, o);
-    if (U.chance(Dp.rates(fid, o, tgt).truce)) {
+    if (force || U.chance(Dp.rates(fid, o, tgt).truce)) {
       G.S.truce[G.relKey(fid, tgt)] = G.S.turn + 18;
       G.log(`${G.facName(fid)} 与 ${G.facName(tgt)} 停战（半年）`, 'l-good');
       return { ok: true, msg: `${G.facName(tgt)} 同意停战！` };
@@ -66,11 +66,11 @@
     return { ok: true, msg: `${G.facName(tgt)} 拒绝停战` };
   };
 
-  Dp.surrender = (fid, o, tgt) => {
+  Dp.surrender = (fid, o, tgt, force) => {
     const e = check(fid, o, tgt); if (e) return { ok: false, msg: e };
     if (G.isPlayer(tgt)) return { ok: false, msg: '无法劝降玩家' };
     spend(fid, o);
-    if (U.chance(Dp.rates(fid, o, tgt).surrender)) {
+    if (force || U.chance(Dp.rates(fid, o, tgt).surrender)) {
       Dp.merge(tgt, fid);
       return { ok: true, msg: `${G.facName(tgt)} 举众归降！` };
     }
