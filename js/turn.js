@@ -98,12 +98,29 @@
     return S.over;
   };
 
+  // 自动行军：朝目标格前进（目标为己方都市则入城，敌城则停在城下）
+  TN.autoMarch = u => {
+    if (u.dest == null || u.acted || u.moved || u.status || !G.S.units[u.id]) return;
+    const [dc, dr] = H.cr(u.dest), cid = SG.map.city[u.dest];
+    const own = cid >= 0 && G.city(cid).faction === u.faction;
+    const keep = cid >= 0 && !own ? (R.TYPES[u.type].ranged ? 2 : 1) : 0;
+    if (H.dist(u.c, u.r, dc, dr) <= keep) { u.dest = null; return; }
+    const step = SG.Units.stepToward(u, u.dest, keep);
+    if (!step) return;
+    SG.Units.moveTo(u, step.idx, step.reach);
+    if (G.S.units[u.id] && H.dist(u.c, u.r, dc, dr) <= keep) {
+      u.dest = null;
+      G.log(`${u.name} 已抵达目的地`, '');
+    }
+  };
+
   // 玩家结束回合
   TN.endPlayerTurn = () => {
     const S = G.S;
     S.proposals = S.proposals || [];
     const pf = S.player;
     for (const city of G.realCitiesOf(pf)) if (city.delegate) SG.AI.domestic(city, 20);
+    for (const u of G.unitsOf(pf)) TN.autoMarch(u);
     const order = U.shuffle(S.factions.filter(f => f.alive && f.id !== pf).map(f => f.id));
     for (const fid of order) {
       try { SG.AI.runFaction(fid); } catch (e) { console.error('AI error', G.facName(fid), e); }

@@ -147,7 +147,10 @@
       h += `<div class="cmd-group">指令　${u.acted ? '<span class="muted">（本回合已行动）</span>' : u.moved ? '<span class="muted">（已移动）</span>' : ''}</div><div class="cmds">
         <button data-act="uMove" ${!can || u.moved ? 'disabled' : ''}>移动</button>
         <button data-act="uAttack" ${!can || ty.noAttack ? 'disabled' : ''}>攻击</button>
-        <button data-act="uWait" ${!can ? 'disabled' : ''}>待机</button></div>`;
+        <button data-act="uWait" ${!can ? 'disabled' : ''}>待机</button>
+        <button data-act="uMarch" ${u.status ? 'disabled' : ''} title="设定目的地，之后每回合自动前进">行军</button>
+        ${u.dest != null ? '<button data-act="uMarchCancel">取消行军</button>' : ''}</div>
+        ${u.dest != null ? `<div class="muted">行军目标：${SG.map.city[u.dest] >= 0 ? esc(G.city(SG.map.city[u.dest]).name) : '(' + H.cr(u.dest).join(',') + ')'}</div>` : ''}`;
       const tacs = R.TACTICS[u.type];
       if (tacs.length) {
         h += `<div class="cmd-group">战法（适性 ${st.apt}）</div><div class="cmds">` + tacs.map(t =>
@@ -158,6 +161,7 @@
           `<button data-act="uScheme" data-id="${s.id}" ${!can || u.energy < s.en ? 'disabled' : ''} title="${s.desc}，气力 ${s.en}">${s.name}<br><small>气${s.en}</small></button>`).join('') + '</div>';
       }
       if (UI.mode === 'target') h += `<p class="good">请在地图上选择红色高亮的目标（右键 / Esc 取消）</p>`;
+      if (UI.mode === 'dest') h += `<p class="good">请在地图上点击行军目的地（都市或任意地点）</p>`;
     }
     return h;
   };
@@ -213,6 +217,8 @@
       case 'uAttack': if (u) UI.beginTarget(u, { kind: 'attack' }); break;
       case 'uTactic': if (u) UI.beginTarget(u, { kind: 'tactic', tactic: R.TACTICS[u.type].find(t => t.id === ds.id) }); break;
       case 'uScheme': if (u) UI.beginTarget(u, { kind: 'scheme', scheme: R.SCHEMES.find(t => t.id === ds.id) }); break;
+      case 'uMarch': if (u) { UI.clearHL(); UI.mode = 'dest'; UI.refresh(); } break;
+      case 'uMarchCancel': if (u) { u.dest = null; UI.refresh(); } break;
       case 'uWait': if (u) { u.acted = true; u.mp = 0; UI.clearHL(); UI.mode = 'idle'; UI.refresh(); } break;
       case 'delegate': city.delegate = !city.delegate; UI.toast(city.delegate ? `${city.name} 已委任：回合结束时自动执行内政` : `已取消 ${city.name} 的委任`); UI.refresh(); break;
       default: if (SG.Dlg[act]) SG.Dlg[act](city);
@@ -242,6 +248,14 @@
         return;
       }
       UI.clearHL(); UI.mode = 'idle'; UI.pending = null; UI.refresh();
+      return;
+    }
+    if (UI.mode === 'dest' && u) {
+      u.dest = i; UI.mode = 'idle';
+      UI.toast('已设定行军目标' + (G.cityAt(c, r) ? '：' + G.cityAt(c, r).name : ''));
+      SG.Turn.autoMarch(u);
+      if (!S.units[u.id]) { UI.select(G.cityAt(c, r) ? { city: G.cityAt(c, r).id } : null); return; }
+      UI.refresh();
       return;
     }
     if (UI.mode === 'unit' && u && UI.reach && UI.reach.has(i) && i !== H.idx(u.c, u.r)) {
@@ -296,6 +310,7 @@
   };
 
   UI.cancel = () => {
+    if (UI.mode === 'dest') { UI.mode = 'idle'; UI.refresh(); return; }
     if (UI.mode === 'target') { UI.clearHL(); UI.mode = 'idle'; UI.pending = null; UI.refresh(); return; }
     UI.select(null);
   };

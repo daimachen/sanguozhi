@@ -4,7 +4,8 @@
   const M = SG.Main = {};
   let inited = false;
 
-  M.start = () => {
+  M.start = (preview) => {
+    document.body.classList.toggle('pregame', !!preview);
     if (!inited) {
       RD.init(document.getElementById('map'), document.getElementById('minimap'));
       UI.bindInput();
@@ -23,7 +24,7 @@
     // 标题画面背后先展示一局预览
     G.newGame('曹操');
     G.S.log = [];
-    M.start();
+    M.start(true);
     RD.cam.zoom = 0.55; RD.centerOn(40, 30);
     SG.Dlg.title();
   });

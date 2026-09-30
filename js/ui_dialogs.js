@@ -127,7 +127,7 @@
         const f = res.found, p = D.employRate(o, f);
         Dlg.confirm('发现人才', `${esc(o.name)} 发现了在野武将 <b>${esc(f.name)}</b>（统${f.s[0]} 武${f.s[1]} 智${f.s[2]} 政${f.s[3]} 魅${f.s[4]}${f.skill ? ' 【' + f.skill + '】' : ''}）。<br>是否当场招揽？（成功率 ${U.pct(p)}）`, () => {
           if (U.chance(p)) {
-            f.status = 'active'; f.faction = city.faction; f.city = city.id; f.hidden = false; f.acted = true;
+            f.status = 'active'; f.faction = city.faction; f.city = city.id; f.hidden = false; f.acted = true; f.fixed = false;
             f.loyalty = U.randInt(75, 90);
             G.log(`${f.name} 加入了 ${G.facName(city.faction)}`, 'l-good');
             Dlg.msg('登用成功', `${esc(f.name)}：「愿效犬马之劳！」`);
@@ -229,7 +229,7 @@
     const pf = city.faction;
     const myCities = new Set(G.citiesOf(pf).map(c => c.id));
     const frees = G.S.officers.filter(o => o.status === 'free' && !o.hidden && myCities.has(o.city));
-    const enemies = G.S.officers.filter(o => o.status === 'active' && o.faction >= 0 && o.faction !== pf && !o.fixed && !G.isRuler(o));
+    const enemies = G.S.officers.filter(o => o.status === 'active' && o.faction >= 0 && o.faction !== pf && !o.fixed && !G.isRuler(o) && o.unit == null);
     const list = [...frees, ...enemies];
     Dlg.pickOfficers({
       title: '登用 · 选择招揽对象', list, sortKey: null,

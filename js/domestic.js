@@ -148,6 +148,7 @@
   };
   D.employ = (city, o, t) => {
     const e = check(city, o, R.AP.employ); if (e) return fail(e);
+    if (t.unit != null) return fail(`${t.name} 正在出征，无法招揽`);
     payAP(city.faction, R.AP.employ);
     o.acted = true;
     const p = D.employRate(o, t);
@@ -156,7 +157,7 @@
       return { ok: true, success: false, msg: `${t.name} 拒绝了 ${o.name} 的招揽` };
     }
     const oldF = t.faction;
-    t.status = 'active'; t.faction = city.faction; t.city = city.id; t.hidden = false; t.captor = -1;
+    t.status = 'active'; t.faction = city.faction; t.city = city.id; t.hidden = false; t.captor = -1; t.fixed = false;
     t.loyalty = U.clamp(70 + Math.round(G.ruler(city.faction).s[4] / 5), 60, 95); t.acted = true; t.unit = null;
     if (oldF >= 0 && oldF !== city.faction) C.checkFaction(oldF);
     G.log(`${t.name} 加入了 ${G.facName(city.faction)}`, G.isPlayer(city.faction) ? 'l-good' : G.isPlayer(oldF) ? 'l-bad' : 'l-dim');
@@ -194,7 +195,7 @@
       const p = D.employRate(rec, t);
       if (U.chance(p)) {
         const oldF = t.faction;
-        t.status = 'active'; t.faction = fid; t.captor = -1; t.loyalty = U.randInt(65, 80); t.acted = true;
+        t.status = 'active'; t.faction = fid; t.captor = -1; t.loyalty = U.randInt(65, 80); t.acted = true; t.fixed = false;
         G.log(`俘虏 ${t.name} 归降 ${G.facName(fid)}`, G.isPlayer(fid) ? 'l-good' : 'l-dim');
         if (oldF >= 0) C.checkFaction(oldF);
         return { ok: true, success: true, msg: `${t.name} 愿意归降！` };

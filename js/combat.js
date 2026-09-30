@@ -130,8 +130,9 @@
     }
     const cs = C.cityStats(tgt.city);
     const rate = tactic ? C.tacticRate(st, cs.war) : 1;
-    const dmg = C.damage(u, st, tgt.city, cs, tactic ? tactic.mult : 1, true);
-    return { rate, dmg: Math.round(dmg), dur: Math.round(C.durDamage(u, st, tactic ? tactic.mult : 1)) };
+    const m = tactic ? 1 + (tactic.mult - 1) * 0.5 : 1;
+    const dmg = C.damage(u, st, tgt.city, cs, m, true);
+    return { rate, dmg: Math.round(dmg), dur: Math.round(C.durDamage(u, st, m)) };
   };
   C.durDamage = (u, st, mult) => {
     let d = Math.sqrt(Math.max(u.troops, 1)) * R.TYPES[u.type].siege * 1.5 * (0.6 + st.war / 250) * mult;
@@ -149,6 +150,7 @@
     return d;
   }
   function hitCity(u, st, city, mult) {
+    mult = 1 + (mult - 1) * 0.5; // 战法对城池效果减半
     const cs = C.cityStats(city);
     const d = Math.max(1, Math.round(C.damage(u, st, city, cs, mult, true) * (0.9 + Math.random() * 0.2)));
     const dd = Math.round(C.durDamage(u, st, mult) * (0.9 + Math.random() * 0.2));
@@ -439,7 +441,7 @@
     for (const o of G.S.officers) {
       if (o.faction === fid && (o.status === 'active' || o.status === 'captive')) {
         if (o.status === 'active') { o.status = 'free'; o.hidden = false; }
-        o.faction = -1; o.loyalty = 100;
+        o.faction = -1; o.loyalty = 100; o.fixed = false;
       }
       if (o.status === 'captive' && o.captor === fid) { o.status = o.faction >= 0 ? 'active' : 'free'; o.captor = -1; }
     }

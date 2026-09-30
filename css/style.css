@@ -23,6 +23,7 @@ button.primary { background: #7a2e22; border-color: #b0513a; }
 button.primary:hover:not(:disabled) { background: #963a2b; }
 button.sel { border-color: var(--gold); background: #6d5630; }
 input[type=range] { width: 100%; }
+.row input[type=range] { flex: 1; width: auto; min-width: 120px; }
 select, input[type=number] { background: #1f1a13; color: var(--text); border: 1px solid var(--line); padding: 3px; font-family: inherit; }
 
 #app { display: flex; flex-direction: column; height: 100%; }
@@ -46,6 +47,7 @@ select, input[type=number] { background: #1f1a13; color: var(--text); border: 1p
 #tooltip { position: absolute; pointer-events: none; background: rgba(20,16,11,.92); border: 1px solid var(--line);
   padding: 4px 8px; border-radius: 3px; font-size: 12px; white-space: nowrap; z-index: 5; }
 .hidden { display: none !important; }
+body.pregame .tb-stats, body.pregame .tb-right, body.pregame .tb-faction { visibility: hidden; }
 
 #log { position: absolute; left: 8px; bottom: 8px; width: 460px; max-width: calc(100% - 16px); max-height: 170px; overflow-y: auto;
   background: rgba(20,16,11,.78); border: 1px solid var(--line); border-radius: 3px; padding: 4px 8px; font-size: 12px; line-height: 1.55; }
@@ -94,7 +96,7 @@ h3 { margin: 10px 0 4px; font-size: 14px; color: var(--gold); border-bottom: 1px
 .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
 .row label { min-width: 64px; color: var(--dim); }
 .opts { display: flex; flex-wrap: wrap; gap: 4px; }
-.faction-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.faction-grid { width: min(820px, 88vw); display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .faction-card { border: 1px solid var(--line); padding: 6px 8px; border-radius: 3px; cursor: pointer; background: var(--panel2); }
 .faction-card:hover { border-color: var(--gold); }
 .faction-card .fn { font-weight: bold; font-size: 15px; }
