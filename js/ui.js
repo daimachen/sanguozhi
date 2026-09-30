@@ -78,7 +78,7 @@
       <p class="muted">移动消耗：${isFinite(SG.Map.moveCost(i, 'spear')) ? SG.Map.moveCost(i, 'spear') : '不可通行'}${t === SG.T.RIVER ? '；部队在河川上将变为舟船，战力依赖水军适性' : ''}</p>`;
   };
 
-  UI.offRow = (o, extra = '') => `<tr class="${o.acted ? 'acted' : ''}" title="${esc(UI.offTitle(o))}"><td>${esc(o.name)}${G.isRuler(o) ? '<span class="skill">★</span>' : G.rank(o) ? `<small class="rank">${G.rank(o).name}</small>` : ''}</td>
+  UI.offRow = (o, extra = '') => `<tr class="${o.acted ? 'acted' : ''}" title="${esc(UI.offTitle(o))}"><td>${SG.Portraits.thumb(o.name)}${esc(o.name)}${G.isRuler(o) ? '<span class="skill">★</span>' : G.rank(o) ? `<small class="rank">${G.rank(o).name}</small>` : ''}</td>
     <td>${o.s[0]}</td><td>${o.s[1]}</td><td>${o.s[2]}</td><td>${o.s[3]}</td><td>${o.s[4]}</td><td>${o.skill ? `<span class="skill">${o.skill}</span>` : '-'}</td>${extra}</tr>`;
   UI.offTitle = o => `${o.name} 统${o.s[0]} 武${o.s[1]} 智${o.s[2]} 政${o.s[3]} 魅${o.s[4]}\n适性 ` +
     R.APT_NAMES.map((n, k) => n + o.apt[k]).join(' ') + (o.skill ? `\n特技【${o.skill}】${R.SKILLS[o.skill] || ''}` : '') + (o.faction >= 0 && o.status === 'active' ? `\n忠诚 ${o.loyalty}　功绩 ${o.merit || 0}　官职 ${G.rank(o) ? G.rank(o).name : G.isRuler(o) ? '君主' : '无'}` : '');
@@ -144,7 +144,8 @@
       </div>${UI.bar(u.troops, u.maxT)}${UI.bar(u.energy, 100, '#64b5f6')}`;
     if (u.status) h += `<div class="warn">状态：${{ confuse: '混乱', false: '伪报', flood: '水困' }[u.status.kind] || '异常'}（${u.status.turns}旬）</div>`;
     if (u.cargo) h += `<div class="muted">运载：金 ${u.cargo.gold || 0}，兵粮 ${u.cargo.food || 0}</div>`;
-    h += `<h3>武将</h3><table class="olist">${UI.offHead()}${C.offs(u).map(o => UI.offRow(o)).join('')}</table>`;
+    h += `<h3>武将</h3><div class="pts">${C.offs(u).map((o, k) => `<figure><img src="${SG.Portraits.src(o.name)}" alt=""><figcaption>${k ? '副将' : '主将'} ${esc(o.name)}</figcaption></figure>`).join('')}</div>
+      <table class="olist">${UI.offHead()}${C.offs(u).map(o => UI.offRow(o)).join('')}</table>`;
     if (own) {
       const can = !u.acted && !u.status;
       h += `<div class="cmd-group">指令　${u.acted ? '<span class="muted">（本回合已行动）</span>' : u.moved ? '<span class="muted">（已移动）</span>' : ''}</div><div class="cmds">

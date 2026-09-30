@@ -1,4 +1,5 @@
 // 剧本：194 年 群雄割据
+SG.DATA = SG.DATA || {};
 SG.DATA.scenario = {
   name: '群雄割据',
   year: 194, month: 1,

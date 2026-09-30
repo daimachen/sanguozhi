@@ -304,7 +304,15 @@
       ctx.fillStyle = col; ctx.strokeStyle = '#1b140c'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(p.x, p.y - 1, 13, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(p.x, p.y - 1, 10.5, 0, Math.PI * 2); ctx.stroke();
-      label(ctx, R.TYPES[u.type].ch, p.x, p.y - 1, 13);
+      const face = z >= 0.6 && SG.Portraits.img(G.off(u.offs[0]).name);
+      if (face) {
+        ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y - 1, 11, 0, Math.PI * 2); ctx.clip();
+        const fw = face.naturalWidth, fh = fw * 0.75; // 取头像上部的方形区域
+        ctx.drawImage(face, 0, fh * 0.08, fw, fw, p.x - 11, p.y - 12, 22, 22);
+        ctx.restore();
+        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p.x + 10, p.y + 8, 6.5, 0, Math.PI * 2); ctx.fill();
+        label(ctx, R.TYPES[u.type].ch, p.x + 10, p.y + 8, 9);
+      } else label(ctx, R.TYPES[u.type].ch, p.x, p.y - 1, 13);
       ctx.fillStyle = '#111'; ctx.fillRect(p.x - 14, p.y + 13, 28, 4);
       ctx.fillStyle = u.troops > u.maxT * 0.5 ? '#66bb6a' : u.troops > u.maxT * 0.25 ? '#ffca28' : '#ef5350';
       ctx.fillRect(p.x - 14, p.y + 13, 28 * U.clamp(u.troops / 15000, 0.03, 1), 4);

@@ -478,7 +478,7 @@
     let winner = null, loser = null;
     if (ha > hb + 10) { winner = a; loser = b; } else if (hb > ha + 10) { winner = b; loser = a; }
     lines.push(winner ? `${winner.name} 胜！` : '不分胜负，各自退回本阵。');
-    return { winner, loser, knockout: winner && Math.min(ha, hb) <= 0, lines };
+    return { a: a.name, b: b.name, winner, loser, knockout: winner && Math.min(ha, hb) <= 0, lines };
   };
   C.startDuel = (u, t) => {
     const a = U.maxBy(C.offs(u), G.war), b = U.maxBy(C.offs(t), G.war);

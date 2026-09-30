@@ -14,6 +14,7 @@
         <button id="t-cont" style="width:220px;padding:8px" ${auto ? '' : 'disabled'}>继续游戏${auto ? `<br><small class="muted">${esc(auto.fac)} ${esc(auto.date)}</small>` : ''}</button>
         <button id="t-load" style="width:220px;padding:8px">读取存档</button>
         <button id="t-help" style="width:220px;padding:8px">游戏说明</button>
+        <a class="btn" href="editor.html" style="width:220px;padding:8px;box-sizing:border-box">武将头像编辑</a>
       </div></div>`, m => {
       m.querySelector('#t-new').addEventListener('click', Dlg.factionSelect);
       m.querySelector('#t-cont').addEventListener('click', () => { if (G.load('auto')) { Dlg.close(); SG.Main.start(); } });
@@ -244,7 +245,7 @@
         <td>${!fromTitle && k !== 'auto' ? `<button data-save="${k}">保存</button>` : ''}${m ? `<button data-load="${k}">读取</button>` : ''}</td></tr>`;
     };
     Dlg.open(`<h2>${fromTitle ? '读取存档' : '系统'}</h2><table class="olist">${['auto', 1, 2, 3].map(slot).join('')}</table>
-      <div class="foot">${fromTitle ? '<button id="s-back">返回</button>' : '<button id="s-help">说明</button><button id="s-title">返回标题</button><button data-close>关闭</button>'}</div>`, m => {
+      <div class="foot">${fromTitle ? '<button id="s-back">返回</button>' : '<a class="btn" href="editor.html" target="_blank" title="在新标签页打开，保存后游戏内自动更新">头像编辑</a><button id="s-help">说明</button><button id="s-title">返回标题</button><button data-close>关闭</button>'}</div>`, m => {
       m.querySelectorAll('[data-save]').forEach(b => b.addEventListener('click', () => {
         UI.toast(G.save(b.dataset.save) ? '已保存' : '保存失败'); Dlg.system(fromTitle);
       }));
@@ -259,7 +260,9 @@
 
   // ---------- 单挑 / 结局 ----------
   Dlg.duel = res => {
-    const show = () => Dlg.open(`<h2>⚔ 单挑</h2><div class="duel" id="duel-box"></div><div class="foot"><button class="primary" data-close>确定</button></div>`, m => {
+    const P = SG.Portraits;
+    const pic = n => `<figure><img src="${P.src(n)}" alt=""><figcaption>${esc(n)}</figcaption></figure>`;
+    const show = () => Dlg.open(`<h2>⚔ 单挑</h2>${res.a ? `<div class="duel-pts">${pic(res.a)}<b style="font-size:22px;color:var(--gold)">VS</b>${pic(res.b)}</div>` : ''}<div class="duel" id="duel-box"></div><div class="foot"><button class="primary" data-close>确定</button></div>`, m => {
       const box = m.querySelector('#duel-box');
       res.lines.forEach((l, k) => setTimeout(() => { box.textContent += l + '\n'; box.scrollTop = box.scrollHeight; }, k * 220));
     });

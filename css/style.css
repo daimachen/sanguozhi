@@ -20,6 +20,8 @@ button { font-family: inherit; font-size: 13px; color: var(--text); background: 
 button:hover:not(:disabled) { background: var(--btn-h); border-color: var(--gold); }
 button:disabled { opacity: .4; cursor: default; }
 button.primary { background: #7a2e22; border-color: #b0513a; }
+a.btn { display: inline-block; font-size: 13px; color: var(--text); background: var(--btn); border: 1px solid var(--line); border-radius: 3px; padding: 4px 10px; text-decoration: none; text-align: center; }
+a.btn:hover { background: var(--btn-h); border-color: var(--gold); }
 button.primary:hover:not(:disabled) { background: #963a2b; }
 button.sel { border-color: var(--gold); background: #6d5630; }
 input[type=range] { width: 100%; }
@@ -86,6 +88,14 @@ h3 { margin: 10px 0 4px; font-size: 14px; color: var(--gold); border-bottom: 1px
 .warn { color: #ff8a80; }
 .good { color: #a5d6a7; }
 .skill { color: #ffd54f; }
+.av { width: 20px; height: 26px; object-fit: cover; border-radius: 2px; vertical-align: middle; margin-right: 4px; display: inline-block; }
+.av.ph { background: linear-gradient(hsl(var(--h),35%,38%), hsl(var(--h),40%,18%)); color: #fff; font-size: 12px; line-height: 26px; text-align: center; }
+.pts { display: flex; gap: 6px; margin: 4px 0 8px; }
+.pts figure { margin: 0; text-align: center; font-size: 11px; color: var(--dim); }
+.pts img { width: 60px; height: 80px; object-fit: cover; border: 1px solid var(--line); border-radius: 2px; display: block; }
+.duel-pts { display: flex; justify-content: space-around; align-items: center; margin-bottom: 8px; }
+.duel-pts img { width: 96px; height: 128px; object-fit: cover; border: 2px solid var(--gold); border-radius: 3px; display: block; }
+.duel-pts figure { margin: 0; text-align: center; }
 .rank { color: #90caf9; font-size: 10px; margin-left: 3px; }
 .evt { line-height: 1.9; max-width: 560px; }
 

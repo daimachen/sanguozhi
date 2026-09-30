@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>武将头像编辑</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/editor.css">
+</head>
+<body class="editor">
+<header class="ed-top">
+  <h1>武将头像编辑</h1>
+  <span class="muted" id="ed-count"></span>
+  <div class="ed-actions">
+    <button id="btn-batch" title="一次选择多张图片，文件名为武将姓名（如 关羽.png）即自动匹配">批量导入</button>
+    <input type="file" id="f-batch" accept="image/*" multiple hidden>
+    <button id="btn-export" title="把全部自定义头像导出为一个文件，便于备份或分享">导出头像包</button>
+    <button id="btn-import" title="导入之前导出的头像包">导入头像包</button>
+    <input type="file" id="f-pack" accept=".json,application/json" hidden>
+    <button id="btn-clear">清空全部</button>
+    <a class="btn primary" href="index.html">返回游戏</a>
+  </div>
+</header>
+<main class="ed-main">
+  <section class="ed-list">
+    <div class="ed-filters">
+      <input id="q" type="search" placeholder="搜索武将姓名…">
+      <select id="fac"></select>
+      <select id="has">
+        <option value="all">全部武将</option>
+        <option value="yes">已有头像</option>
+        <option value="no">尚无头像</option>
+      </select>
+    </div>
+    <div id="grid" class="ed-grid"></div>
+  </section>
+  <aside class="ed-detail" id="detail"></aside>
+</main>
+<div id="toast-area"></div>
+<script src="js/util.js"></script>
+<script src="js/data/officers.js"></script>
+<script src="js/data/scenario.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/state.js"></script>
+<script src="js/portraits.js"></script>
+<script src="js/editor.js"></script>
+</body>
+</html>

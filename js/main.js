@@ -20,6 +20,8 @@
   };
 
   window.addEventListener('load', () => {
+    SG.Portraits.loadAll();
+    SG.Portraits.onChange(() => { if (G.S) UI.refresh(); });
     SG.Map.build();
     // 标题画面背后先展示一局预览
     G.newGame('曹操');

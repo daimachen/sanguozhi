@@ -38,7 +38,7 @@
     const chosen = [];
     const max = opts.multi ? (opts.max || 99) : 1;
     const rows = list.map(o => `<tr class="pick ${o.acted ? 'acted' : ''}" data-oid="${o.id}" title="${esc(UI.offTitle(o))}">
-      <td>${esc(o.name)}</td><td>${o.s[0]}</td><td>${o.s[1]}</td><td>${o.s[2]}</td><td>${o.s[3]}</td><td>${o.s[4]}</td>
+      <td>${SG.Portraits.thumb(o.name)}${esc(o.name)}</td><td>${o.s[0]}</td><td>${o.s[1]}</td><td>${o.s[2]}</td><td>${o.s[3]}</td><td>${o.s[4]}</td>
       <td>${o.skill ? `<span class="skill">${o.skill}</span>` : '-'}</td>${opts.extra ? opts.extra(o) : ''}</tr>`).join('');
     Dlg.open(`<h2>${esc(opts.title)}</h2>${opts.note ? `<p class="muted">${opts.note}</p>` : ''}
       <div class="scroll"><table class="olist">${UI.offHead(opts.extraHead || '')}${rows || '<tr><td colspan=9 class="muted">没有可选的武将</td></tr>'}</table></div>
