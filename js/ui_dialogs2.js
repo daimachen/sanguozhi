@@ -171,7 +171,8 @@
     const q = G.S.eventQueue || (G.S.eventQueue = []);
     const e = q.shift();
     if (!e) return;
-    Dlg.open(`<h2>【${esc(e.title)}】</h2><div class="evt">${e.text}</div>
+    const ppl = (e.people || []).filter(Boolean).slice(0, 3);
+    Dlg.open(`<h2>【${esc(e.title)}】</h2>${ppl.length ? `<div class="evt-pts">${ppl.map(n => `<figure><img src="${SG.Portraits.src(n)}" alt=""><figcaption>${esc(n)}</figcaption></figure>`).join('')}</div>` : ''}<div class="evt">${e.text}</div>
       <div class="foot"><button class="primary" id="ev-ok">知道了</button></div>`, m => {
       m.querySelector('#ev-ok').addEventListener('click', () => { Dlg.close(); Dlg.events(); });
     });
@@ -244,7 +245,14 @@
       return `<tr><td>${k === 'auto' ? '自动' : '存档 ' + k}</td><td style="text-align:left">${m ? esc(m.fac) + ' ' + esc(m.date) + '<br><small class="muted">' + esc(m.at) + '</small>' : '<span class="muted">空</span>'}</td>
         <td>${!fromTitle && k !== 'auto' ? `<button data-save="${k}">保存</button>` : ''}${m ? `<button data-load="${k}">读取</button>` : ''}</td></tr>`;
     };
-    Dlg.open(`<h2>${fromTitle ? '读取存档' : '系统'}</h2><table class="olist">${['auto', 1, 2, 3].map(slot).join('')}</table>
+    const pf = SG.Cutin.prefs;
+    const prefs = fromTitle ? '' : `<h3>显示设置</h3>
+      <div class="row"><label>武将立绘</label><select id="p-cutin">
+        <option value="all" ${pf.cutin === 'all' ? 'selected' : ''}>战法、计略时都显示</option>
+        <option value="crit" ${pf.cutin === 'crit' ? 'selected' : ''}>仅会心一击与决堤</option>
+        <option value="off" ${pf.cutin === 'off' ? 'selected' : ''}>关闭</option></select></div>
+      <div class="row"><label>军师建言</label><label style="min-width:0;color:var(--text)"><input type="checkbox" id="p-adv" ${pf.advisor ? 'checked' : ''}> 每回合开始自动献策</label></div>`;
+    Dlg.open(`<h2>${fromTitle ? '读取存档' : '系统'}</h2><table class="olist">${['auto', 1, 2, 3].map(slot).join('')}</table>${prefs}
       <div class="foot">${fromTitle ? '<button id="s-back">返回</button>' : '<a class="btn" href="editor.html" target="_blank" title="在新标签页打开，保存后游戏内自动更新">头像编辑</a><button id="s-help">说明</button><button id="s-title">返回标题</button><button data-close>关闭</button>'}</div>`, m => {
       m.querySelectorAll('[data-save]').forEach(b => b.addEventListener('click', () => {
         UI.toast(G.save(b.dataset.save) ? '已保存' : '保存失败'); Dlg.system(fromTitle);
@@ -253,6 +261,8 @@
         if (G.load(b.dataset.load)) { Dlg.close(); SG.Main.start(); UI.toast('读取完成'); } else UI.toast('读取失败');
       }));
       const bk = m.querySelector('#s-back'); if (bk) bk.addEventListener('click', Dlg.title);
+      const pc = m.querySelector('#p-cutin'); if (pc) pc.addEventListener('change', e => { SG.Cutin.prefs.cutin = e.target.value; SG.Cutin.savePrefs(); });
+      const pa = m.querySelector('#p-adv'); if (pa) pa.addEventListener('change', e => { SG.Cutin.prefs.advisor = e.target.checked; SG.Cutin.savePrefs(); });
       const hp = m.querySelector('#s-help'); if (hp) hp.addEventListener('click', () => Dlg.help());
       const tt = m.querySelector('#s-title'); if (tt) tt.addEventListener('click', () => Dlg.confirm('返回标题', '未保存的进度将会丢失（自动存档保留至上一回合）。', Dlg.title, Dlg.system, '确定', '取消'));
     });

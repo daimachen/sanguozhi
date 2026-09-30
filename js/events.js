@@ -10,9 +10,9 @@
   const capital = fid => G.city(G.fac(fid).capital) || G.citiesOf(fid)[0];
   const strip = s => s.replace(/<[^>]+>/g, '');
 
-  EV.announce = (title, text, cls = 'l-war') => {
+  EV.announce = (title, text, people = [], cls = 'l-war') => {
     G.log(`【${title}】${strip(text)}`, cls);
-    G.S.eventQueue.push({ title, text });
+    G.S.eventQueue.push({ title, text, people });
   };
 
   // 从部队中移除武将（部队无人统领则并入最近都市）
@@ -61,7 +61,7 @@
         f.emperor = true;
         capital(fid).gold += 3000;
         for (const o of G.officersOf(fid)) o.loyalty = Math.min(100, o.loyalty + 5);
-        EV.announce('迎奉天子', `汉献帝东归，${ruler.name} 率军迎驾，奉天子以令不臣。<br>${f.name}：每旬行动力 +15，金 +3000，全体武将忠诚 +5。`);
+        EV.announce('迎奉天子', `汉献帝东归，${ruler.name} 率军迎驾，奉天子以令不臣。<br>${f.name}：每旬行动力 +15，金 +3000，全体武将忠诚 +5。`, [ruler.name]);
       },
     },
     {
@@ -72,7 +72,7 @@
         G.fac(fid).pretender = true;
         for (const f of G.S.factions) if (f.alive && f.id !== fid) G.addRel(fid, f.id, -30);
         for (const o of G.officersOf(fid)) if (!o.fixed) o.loyalty = Math.max(0, o.loyalty - 10);
-        EV.announce('袁术称帝', '袁术自以为「代汉者当涂高」，于寿春僭号称帝，建号仲氏。天下诸侯共愤之！<br>各势力对袁术友好度 -30，其部下忠诚 -10。');
+        EV.announce('袁术称帝', '袁术自以为「代汉者当涂高」，于寿春僭号称帝，建号仲氏。天下诸侯共愤之！<br>各势力对袁术友好度 -30，其部下忠诚 -10。', ['袁术']);
       },
     },
     {
@@ -84,7 +84,7 @@
       run: () => {
         const lf = rulerFac('刘备'), g = off('关羽');
         join(g, lf); g.loyalty = 100; g.fixed = true;
-        EV.announce('千里走单骑', '关羽得知兄长刘备下落，挂印封金，护送二嫂过五关、斩六将，千里走单骑，终归刘备麾下。');
+        EV.announce('千里走单骑', '关羽得知兄长刘备下落，挂印封金，护送二嫂过五关、斩六将，千里走单骑，终归刘备麾下。', ['关羽', '刘备']);
       },
     },
     {
@@ -96,7 +96,7 @@
       run: () => {
         const lf = rulerFac('刘备'), z = off('张飞');
         join(z, lf); z.loyalty = 100; z.fixed = true;
-        EV.announce('古城相会', '张飞据古城，闻兄长消息，引兵来投。桃园兄弟再度聚首！');
+        EV.announce('古城相会', '张飞据古城，闻兄长消息，引兵来投。桃园兄弟再度聚首！', ['张飞', '关羽', '刘备']);
       },
     },
     {
@@ -106,7 +106,7 @@
         const s = off('孙策');
         die(s, '孙权');
         const fid = s.faction;
-        EV.announce('孙策遇刺', `孙策于丹徒狩猎，遭许贡门客伏击，伤重而亡，年仅二十六。临终谓：「举贤任能，以保江东，我不如卿。」<br>${G.facName(fid)} 由 ${G.ruler(fid) ? G.ruler(fid).name : '他人'} 继承。`);
+        EV.announce('孙策遇刺', `孙策于丹徒狩猎，遭许贡门客伏击，伤重而亡，年仅二十六。临终谓：「举贤任能，以保江东，我不如卿。」<br>${G.facName(fid)} 由 ${G.ruler(fid) ? G.ruler(fid).name : '他人'} 继承。`, ['孙策', '孙权']);
       },
     },
     {
@@ -116,7 +116,7 @@
         const y = off('袁绍'), fid = y.faction;
         die(y, off('袁尚') && off('袁尚').faction === fid ? '袁尚' : '袁谭');
         for (const o of G.officersOf(fid)) if (!o.fixed) o.loyalty = Math.max(0, o.loyalty - 8);
-        EV.announce('袁绍病逝', `袁绍忧愤成疾，呕血而亡。诸子争位，河北人心浮动（部下忠诚 -8）。<br>${G.facName(fid)} 由 ${G.ruler(fid) ? G.ruler(fid).name : '他人'} 继承。`);
+        EV.announce('袁绍病逝', `袁绍忧愤成疾，呕血而亡。诸子争位，河北人心浮动（部下忠诚 -8）。<br>${G.facName(fid)} 由 ${G.ruler(fid) ? G.ruler(fid).name : '他人'} 继承。`, ['袁绍', G.ruler(fid) ? G.ruler(fid).name : '袁尚']);
       },
     },
     {
@@ -125,7 +125,7 @@
       run: () => {
         const fid = rulerFac('刘备'), z = off('诸葛亮');
         join(z, fid); z.loyalty = 100; z.fixed = true;
-        EV.announce('三顾茅庐', '刘备三顾隆中，诸葛亮纵论天下三分之势（隆中对），感其诚意，出山辅佐。');
+        EV.announce('三顾茅庐', '刘备三顾隆中，诸葛亮纵论天下三分之势（隆中对），感其诚意，出山辅佐。', ['刘备', '诸葛亮']);
       },
     },
     {
@@ -134,7 +134,7 @@
       run: () => {
         const l = off('刘表'), fid = l.faction;
         die(l, off('刘琮') && off('刘琮').faction === fid ? '刘琮' : '刘琦');
-        EV.announce('刘表病逝', `荆州牧刘表病逝，蔡氏拥立幼子。<br>${G.facName(fid)} 由 ${G.ruler(fid) ? G.ruler(fid).name : '他人'} 继承。`);
+        EV.announce('刘表病逝', `荆州牧刘表病逝，蔡氏拥立幼子。<br>${G.facName(fid)} 由 ${G.ruler(fid) ? G.ruler(fid).name : '他人'} 继承。`, ['刘表', G.ruler(fid) ? G.ruler(fid).name : '刘琮']);
       },
     },
     {
@@ -142,7 +142,7 @@
       cond: () => true,
       run: () => {
         G.S.eastWind = G.S.turn + 9;
-        EV.announce('东南风起', '隆冬时节，江上忽起东南大风。三个月内水上火攻伤害加倍，火势更易在战船间蔓延——火烧连营，正当其时！');
+        EV.announce('东南风起', '隆冬时节，江上忽起东南大风。三个月内水上火攻伤害加倍，火势更易在战船间蔓延——火烧连营，正当其时！', ['周瑜', '诸葛亮']);
       },
     },
     {
@@ -152,7 +152,7 @@
         const lb = rulerFac('刘备'), lz = rulerFac('刘璋');
         const who = ['张松', '法正', '孟达'].map(off).filter(o => o.status === 'active' && o.faction === lz);
         who.forEach(o => join(o, lb));
-        EV.announce('张松献图', `张松暗携西川地图投奔刘备，${who.map(o => o.name).join('、')} 归附刘备。`);
+        EV.announce('张松献图', `张松暗携西川地图投奔刘备，${who.map(o => o.name).join('、')} 归附刘备。`, ['张松', '刘备']);
       },
     },
   ];

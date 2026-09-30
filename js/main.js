@@ -17,6 +17,8 @@
     RD.cam.zoom = 0.9;
     if (cap) RD.centerOn(cap.c, cap.r);
     UI.refresh();
+    const adv = document.getElementById('advisor');
+    if (preview) adv.classList.add('hidden'); else setTimeout(() => SG.Advisor.turnStart(), 300);
   };
 
   window.addEventListener('load', () => {

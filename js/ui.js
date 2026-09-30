@@ -427,6 +427,7 @@
     $('btn-factions').addEventListener('click', () => SG.Dlg.factionList());
     $('btn-diplomacy').addEventListener('click', () => SG.Dlg.diplomacy());
     $('btn-ranks').addEventListener('click', () => SG.Dlg.ranks());
+    $('btn-advisor').addEventListener('click', () => SG.Advisor.toggle());
     $('btn-auto').addEventListener('click', () => SG.Dlg.autoMode());
     $('btn-system').addEventListener('click', () => SG.Dlg.system());
     setInterval(() => { if (UI.logDirty && G.S) UI.renderLog(); }, 300);
@@ -452,6 +453,7 @@
       $('btn-endturn').disabled = false; $('btn-endturn').textContent = '结束回合';
       UI.refresh();
       UI.checkOver();
+      SG.Advisor.turnStart();
       SG.Dlg.proposals();
     }, 30);
   };

@@ -198,6 +198,7 @@
     let mult = tactic ? tactic.mult : 1, crit = false;
     if (tactic && U.chance(C.critRate(u, st))) { crit = true; mult *= 1.5; }
     if (tactic) SG.fx(u.c, u.r, tactic.name + (crit ? '·暴击!' : ''), crit ? '#ffd54f' : '#fff');
+    if (tactic && SG.Cutin) SG.Cutin.tactic(u, tactic, crit, tgt);
 
     if (tgt.city) {
       const d = hitCity(u, st, tgt.city, mult);
@@ -327,6 +328,7 @@
       SG.fx(c, r, sch.id === 'confuse' ? '混乱' : '伪报', '#ce93d8');
     }
     G.log(`${u.name} 对 ${tName} 施展「${sch.name}」成功`, cls);
+    if (SG.Cutin) SG.Cutin.scheme(u, sch, tu);
     return { ok: true, msg: '成功' };
   };
 

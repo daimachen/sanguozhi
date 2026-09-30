@@ -167,6 +167,7 @@
     const epic = hitUnits >= 3;
     G.log(`${who} 决堤放水（水位 ${level}），淹没 ${a.land.size} 格${epic ? '——水淹七军！' : ''}`, involvesPlayer ? 'l-war' : 'l-dim');
     if (involvesPlayer && SG.UI) SG.UI.toast(epic ? '水淹七军！' : '决堤放水！');
+    if (involvesPlayer && SG.Cutin && by && by.offs) SG.Cutin.flood(by, epic);
     if (by && by.offs) G.merit(G.off(by.offs[0]), 20 + total / 100);
     C.cleanup(by && by.offs ? by : null);
     return { ok: true, msg: `洪水淹没 ${a.land.size} 格，敌我共折损 ${total}` };

@@ -23,9 +23,12 @@
       m.querySelector('#no').addEventListener('click', () => { Dlg.close(); no && no(); });
     });
   };
-  const done = (res, city) => {
+  const done = (res, city, oid) => {
     if (!res.ok) { UI.toast(res.msg); return false; }
-    if (res.msg) { UI.toast(res.msg); G.log(res.msg, ''); }
+    if (res.msg) {
+      if (oid != null && SG.Cutin) SG.Cutin.report(G.off(oid).name, res.msg); else UI.toast(res.msg);
+      G.log(res.msg, '');
+    }
     UI.refresh();
     return true;
   };
@@ -80,7 +83,7 @@
         Dlg.pickOfficers({
           title: `建设${R.FACILITIES[type].name} · 选择负责武将`, list: idle(city), sortKey: 3,
           extraHead: '<th>工期</th>', extra: o => `<td>${D.buildTurns(o, type)}旬</td>`, note: '政治越高，工期越短',
-          onOk: ([id]) => done(D.build(city, G.off(id), type), city) && UI.toast(`开始建设${R.FACILITIES[type].name}`),
+          onOk: ([id]) => done(D.build(city, G.off(id), type), city, id) && SG.Cutin.report(G.off(id).name, `开始建设${R.FACILITIES[type].name}（${D.buildTurns(G.off(id), type)}旬）`),
         });
       }));
     });
@@ -89,17 +92,17 @@
     title: `征兵 · ${city.name}`, list: idle(city), sortKey: 4,
     extraHead: '<th>兵数</th><th>费用</th>', extra: o => { const a = D.recruitAmount(city, o); return `<td>${a}</td><td>${D.recruitCost(a)}</td>`; },
     note: `魅力越高征兵越多；兵营 ${G.facilityCount(city, 'barracks')} 座。征兵会降低治安与平均气力。上限 ${D.troopCap(city)}`,
-    onOk: ([id]) => done(D.recruit(city, G.off(id)), city),
+    onOk: ([id]) => done(D.recruit(city, G.off(id)), city, id),
   });
   Dlg.train = city => Dlg.pickOfficers({
     title: `训练 · ${city.name}`, list: idle(city), sortKey: 0,
     extraHead: '<th>气力</th>', extra: o => `<td>+${D.trainAmount(o)}</td>`, note: `当前气力 ${city.energy}。统率越高效果越好`,
-    onOk: ([id]) => done(D.train(city, G.off(id)), city),
+    onOk: ([id]) => done(D.train(city, G.off(id)), city, id),
   });
   Dlg.patrol = city => Dlg.pickOfficers({
     title: `巡察 · ${city.name}`, list: idle(city), sortKey: 4,
     extraHead: '<th>治安</th>', extra: o => `<td>+${D.patrolAmount(o)}</td>`, note: `当前治安 ${city.order}。治安影响收入`,
-    onOk: ([id]) => done(D.patrol(city, G.off(id)), city),
+    onOk: ([id]) => done(D.patrol(city, G.off(id)), city, id),
   });
   Dlg.produce = city => {
     const opts = Object.keys(R.WEAPONS).map(k => {
@@ -113,7 +116,7 @@
         Dlg.pickOfficers({
           title: `生产${R.WEAPONS[wk].name}`, list: idle(city), sortKey: 3,
           extraHead: '<th>产量</th><th>费用</th>', extra: o => { const a = D.produceAmount(city, o, wk); return `<td>${a}</td><td>${D.produceCost(wk, a)}</td>`; },
-          onOk: ([id]) => done(D.produce(city, G.off(id), wk), city),
+          onOk: ([id]) => done(D.produce(city, G.off(id), wk), city, id),
         });
       }));
     });
@@ -122,7 +125,7 @@
     title: `搜索 · ${city.name}`, list: idle(city), sortKey: 2, note: '智力越高越容易发现在野人才',
     onOk: ([id]) => {
       const o = G.off(id), res = D.search(city, o);
-      if (!done(res, city)) return;
+      if (!done(res, city, id)) return;
       if (res.found) {
         const f = res.found, p = D.employRate(o, f);
         Dlg.confirm('发现人才', `${esc(o.name)} 发现了在野武将 <b>${esc(f.name)}</b>（统${f.s[0]} 武${f.s[1]} 智${f.s[2]} 政${f.s[3]} 魅${f.s[4]}${f.skill ? ' 【' + f.skill + '】' : ''}）。<br>是否当场招揽？（成功率 ${U.pct(p)}）`, () => {
@@ -257,7 +260,7 @@
   Dlg.reward = city => Dlg.pickOfficers({
     title: `褒赏 · ${city.name}（每次金 100）`, list: G.officersIn(city.id).filter(o => o.loyalty < 100), sortKey: null,
     extraHead: '<th>忠诚</th>', extra: o => `<td>${o.loyalty}</td>`, note: '忠诚过低的武将可能被他国挖角或出奔。',
-    onOk: ([id]) => done(D.reward(city, G.off(id)), city),
+    onOk: ([id]) => done(D.reward(city, G.off(id)), city, id),
   });
   Dlg.summon = city => Dlg.pickOfficers({
     title: `召唤武将至 ${city.name}`, multi: true, max: 20,
